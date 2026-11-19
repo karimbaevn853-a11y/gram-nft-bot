@@ -1,8 +1,6 @@
 import asyncio
 import logging
 import os
-import random
-import time
 import aiohttp
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import CommandStart
@@ -26,16 +24,16 @@ UZCARD_NUMBER = "5614681401815257"
 VISA_CARD_NUMBER = ""  # Keyinchalik Visa karta raqamini shu yerga qo'shamiz
 TON_WALLET = "UQA4qQ6E8Kf0vHXXCti_PzO71qXi7KiEeN5d71UO7xWiTL-w"
 
-# Birja narxi (1:1 asos) va Mina/farq sozlamalari
+# Birja narxi va ustama sozlamalari
 DEFAULT_GRAM_UZS = 15_000.0
 DEFAULT_USD_RATE = 12_800.0
-MINA_VALUE_UZS = 2_000.0       # 1 mina = 2 000 so'm
-SPREAD_MINA = 1.0              # Har bitimda 1 mina (2 000 so'm) farq
+BUY_MARKUP_UZS = 2_000.0       # Foydalanuvchi gramm sotib olganda +2 000 so'm
+BUY_MARKUP_USD = 0.17          # Dollar ekvivalentida +$0.17
 
-# TON tarmog'idagi GRAM token pool manzili (GeckoTerminal)
+# Real API manzillari (bepul, kalitsiz)
 GECKO_GRAM_POOL_URL = (
     "https://api.geckoterminal.com/api/v2/networks/ton/pools/"
-    "EQD-CvR0upZUP-CQdOksh-PLpwMaxM8EWMv_tH4K7o8v1z0g"
+    "EQASBZLwa2vfdsgoDF2w96pdccBJJRxDNXXPUL7NMm0WdnMx"
 )
 CBU_RATES_URL = "https://cbu.uz/uz/arkhiv-kursov-valyut/json/"
 
@@ -181,23 +179,17 @@ dp = Dispatcher()
 
 user_lang: dict[int, str] = {}
 user_balance_uzs: dict[int, float] = {}
-user_mina: dict[int, float] = {}
 user_state: dict[int, dict] = {}
 pending_topups: dict[int, dict] = {}
 
-market_cache = {
+market_state = {
     "gram_uzs": DEFAULT_GRAM_UZS,
     "usd_rate": DEFAULT_USD_RATE,
-    "updated_at": 0.0,
 }
 
 
-async def refresh_market_prices(force: bool = False) -> tuple[float, float]:
-    now = time.time()
-    if not force and (now - market_cache["updated_at"] < 45):
-        return market_cache["gram_uzs"], market_cache["usd_rate"]
-
-    usd_rate = market_cache["usd_rate"]
+async def fetch_live_market() -> tuple[float, float]:
+    usd_rate = market_state["usd_rate"]
     gram_usd = None
 
     timeout = aiohttp.ClientTimeout(total=6)
@@ -214,45 +206,38 @@ async def refresh_market_prices(force: bool = False) -> tuple[float, float]:
             async with session.get(GECKO_GRAM_POOL_URL) as resp:
                 if resp.status == 200:
                     data = await resp.json()
-                    attrs = (
-                        data.get("data", {})
-                        .get("attributes", {})
-                    )
+                    attrs = data.get("data", {}).get("attributes", {})
                     price_str = attrs.get("base_token_price_usd")
                     if price_str:
                         gram_usd = float(price_str)
     except Exception as exc:
-        logging.warning("Birja API yangilanishida xato: %s", exc)
+        logging.warning("Jonli birja API xatosi: %s", exc)
 
     if gram_usd and gram_usd > 0:
         gram_uzs = gram_usd * usd_rate
-    else:
-        delta = random.uniform(-0.012, 0.012)
-        gram_uzs = max(100.0, market_cache["gram_uzs"] * (1.0 + delta))
+        market_state["gram_uzs"] = gram_uzs
 
-    market_cache["gram_uzs"] = gram_uzs
-    market_cache["usd_rate"] = usd_rate
-    market_cache["updated_at"] = now
-    return gram_uzs, usd_rate
+    market_state["usd_rate"] = usd_rate
+    return market_state["gram_uzs"], market_state["usd_rate"]
 
 
 TEXTS = {
     "uz": {
         "choose_lang": "🌐 Tilni tanlang / Выберите язык / Choose language:",
-        "lang_set": "✅ Til tanlandi: O‘zbekcha",
-        "sub_req": "⚠️ Keyingi sahifaga o‘tish uchun <b>{ch}</b> kanaliga obuna bo‘ling!",
+        "lang_set": "O‘zbekcha tanlandi",
+        "sub_req": "⚠️ Davom etish uchun <b>{ch}</b> kanaliga obuna bo‘ling!",
         "btn_sub_channel": "📢 Kanalga obuna bo‘lish",
         "btn_check_sub": "✅ Obunani tekshirish",
-        "not_sub_yet": "❌ Hali {ch} kanaliga obuna bo‘lmadingiz! Avval obuna bo‘ling.",
+        "not_sub_yet": "❌ Hali {ch} kanaliga obuna bo‘lmadingiz!",
         "main_menu": (
             "⭐️ <b>Asosiy menyu</b>\n\n"
             "🆔 ID: <code>{uid}</code>\n"
             "💰 Balans: <b>{bal}</b>\n"
-            "⛏ Mina: <b>{mina:.2f} mina</b>\n"
-            "📈 1 GRAM (birja 1:1): <b>{gram_p}</b>"
+            "📊 1 GRAM birja narxi (1:1): <b>{gram_p}</b>\n"
+            "🟢 Gramm sotib olish narxi (1g): <b>{buy_p}</b> (+2 000 so‘m / +$0.17)"
         ),
         "btn_nft": "💎 NFT Gift olish",
-        "btn_buy_gram": "🟢 Gramm olish",
+        "btn_buy_gram": "🟢 Gramm sotib olish",
         "btn_sell_gram": "🔴 Gramm sotish",
         "btn_topup": "💳 Hisob to‘ldirish",
         "btn_profile": "👤 Profil",
@@ -260,60 +245,59 @@ TEXTS = {
         "profile_text": (
             "👤 <b>Profil</b>\n\n"
             "🆔 ID: <code>{uid}</code>\n"
-            "💰 Balans: <b>{bal}</b>\n"
-            "⛏ Mina balansi: <b>{mina:.2f} mina</b>"
+            "💰 Balans: <b>{bal}</b>"
         ),
         "ask_topup": "💳 Necha so‘m hisob to‘ldirmoqchisiz? (Masalan: <code>50000</code>)",
-        "invalid_num": "❌ Iltimos, 0 dan katta son kiriting (masalan: <code>50000</code> yoki <code>1</code>).",
+        "invalid_num": "❌ 0 dan katta son kiriting (masalan: <code>1</code> yoki <code>50000</code>).",
         "topup_card_info": (
             "💳 <b>Hisob to‘ldirish</b>\n\n"
             "💵 Summa: <b>{amt:,.0f} so‘m</b>\n"
             "{cards_block}\n\n"
-            "To‘lov qilgach, <b>chek rasmini</b> shu yerga yuboring. Admin tasdiqlagach hisobingiz to‘ldiriladi."
+            "To‘lov qilgach, <b>chek rasmini</b> yuboring. Admin tasdiqlagach hisobingiz to‘ladi."
         ),
-        "topup_wait_receipt": "📸 Iltimos, to‘lov chekining rasmini yuboring.",
-        "topup_sent": "✅ Chek adminga yuborildi! {admin} tasdiqlagach balansingiz yangilanadi.",
+        "topup_wait_receipt": "📸 To‘lov chekining rasmini yuboring.",
+        "topup_sent": "✅ Chek {admin} ga yuborildi. Tasdiqlangach hisobingiz to‘ladi.",
         "topup_approved": "✅ Hisobingiz <b>{amt:,.0f} so‘m</b> ga to‘ldirildi!",
         "topup_rejected": "❌ To‘lov cheki rad etildi.",
         "ask_gram_buy": (
-            "🟢 <b>Gramm olish</b>\n"
-            "💰 Mavjud balans: <b>{bal}</b>\n"
-            "📈 1 GRAM birja narxi (1:1): <b>{gram_p}</b> (+ 2 000 so‘m / 1 mina farq)\n"
+            "🟢 <b>Gramm sotib olish</b>\n"
+            "💰 Balansingiz: <b>{bal}</b>\n"
+            "💵 1 GRAM narxi: <b>{buy_p}</b> (birja narxidan +2 000 so‘m / +$0.17 ko‘p)\n"
             "Nechta GRAM olmoqchisiz? (Masalan: <code>1</code> yoki <code>0.5</code>)"
         ),
         "insufficient_bal": (
-            "❌ Balansingiz yetarli emas!\n"
+            "❌ Hisobingizda mablag‘ yetarli emas!\n"
             "Kerakli summa: <b>{need}</b>\n"
             "Sizning balansingiz: <b>{bal}</b>\n"
-            "Hisobingiz yetgan miqdorda olishingiz yoki hisob to‘ldirishingiz mumkin."
+            "Avval hisobni to‘ldiring yoki balansingiz yetadigan miqdor kiriting."
         ),
-        "gram_bought": (
-            "✅ <b>{grams} GRAM</b> sotib olindi!\n"
-            "💳 Yechilgan summa: <b>{spent}</b>\n"
-            "⛏ Qo‘shilgan farq: <b>+{spread_mina:.2f} mina</b> ({spread_uzs:,.0f} so‘m)"
+        "admin_will_contact_buy": (
+            "📩 <b>Admin siz bilan bog‘lanadi</b>\n\n"
+            "✅ Buyurtma qabul qilindi: <b>{grams} GRAM</b>\n"
+            "💳 Hisobdan yechildi: <b>{spent}</b>\n"
+            "🤝 Admin ({admin}) siz bilan bog‘lanib, GRAM ni beradi."
         ),
         "ask_gram_sell": (
-            "🔴 <b>Gramm sotish</b>\n"
-            "📈 1 GRAM birja narxi (1:1): <b>{gram_p}</b> (farq: -2 000 so‘m / 1 mina)\n"
+            "🔴 <b>Gramm sotish (Birja narxi 1:1)</b>\n"
+            "📊 1 GRAM birja narxi: <b>{gram_p}</b>\n"
             "Nechta GRAM sotmoqchisiz? (Masalan: <code>1</code> yoki <code>0.5</code>)"
         ),
         "ask_sell_wallet": (
             "📬 <b>TON manzilingizni yozib keting</b>\n"
             "⚖️ Miqdor: <b>{grams} GRAM</b>\n"
-            "💵 Hisoblangan summa (1:1 - farq): <b>{got}</b>\n\n"
-            "TON manzilingizni yuborsangiz, ma’lumotlar {admin} ga yuboriladi va siz bilan bog‘lanib TON beriladi."
+            "💵 Birja narxi (1:1) bo‘yicha summa: <b>{got}</b>"
         ),
-        "invalid_wallet": "❌ Iltimos, to‘g‘ri TON manzil kiriting.",
-        "gram_sold": (
-            "✅ <b>{grams} GRAM</b> sotish arizasi qabul qilindi!\n"
+        "invalid_wallet": "❌ To‘g‘ri TON manzil kiriting.",
+        "admin_will_contact_sell": (
+            "📩 <b>Admin siz bilan bog‘lanadi</b>\n\n"
+            "✅ Ariza yuborildi: <b>{grams} GRAM</b> sotish\n"
             "📬 TON manzil: <code>{wallet}</code>\n"
-            "💵 Hisoblangan summa: <b>{got}</b>\n"
-            "⛏ Farq / Mina: <b>-{spread_mina:.2f} mina</b> ({spread_uzs:,.0f} so‘m)\n"
-            "Ma’lumot {ch} kanaliga va {admin} ga yuborildi. Admin o‘zi bog‘lanadi."
+            "💵 Summa (1:1): <b>{got}</b>\n"
+            "🤝 Admin ({admin}) siz bilan bog‘lanadi."
         ),
         "nft_title": (
             "💎 <b>NFT Gift katalogi ({count} ta)</b>\n"
-            "⚠️ NFT sotib olish faqat <b>TON</b> orqali va <b>{admin}</b> bilan kelishilgan holda amalga oshadi.\n"
+            "⚠️ Faqat <b>TON</b> orqali va <b>{admin}</b> bilan kelishilgan holda.\n"
             "TON manzil: <code>{ton}</code>"
         ),
         "nft_selected": (
@@ -325,23 +309,23 @@ TEXTS = {
         "btn_order_nft": "📩 NFT buyurtma berish",
         "btn_back": "⬅️ Ortga",
         "nft_ordered": (
-            "✅ Buyurtmangiz <b>{admin}</b> lichkasiga yuborildi!\n"
-            "Savdo faqat TON va admin bilan kelishilgan holda o‘tkaziladi."
+            "📩 <b>Admin siz bilan bog‘lanadi</b>\n\n"
+            "✅ <b>{gift}</b> bo‘yicha buyurtma {admin} ga yuborildi."
         ),
     },
     "ru": {
         "choose_lang": "🌐 Выберите язык / Tilni tanlang / Choose language:",
-        "lang_set": "✅ Язык выбран: Русский",
-        "sub_req": "⚠️ Для перехода дальше подпишитесь на канал <b>{ch}</b>!",
+        "lang_set": "Выбран русский язык",
+        "sub_req": "⚠️ Для продолжения подпишитесь на канал <b>{ch}</b>!",
         "btn_sub_channel": "📢 Подписаться на канал",
         "btn_check_sub": "✅ Проверить подписку",
-        "not_sub_yet": "❌ Вы ещё не подписались на {ch}! Сначала вступите в канал.",
+        "not_sub_yet": "❌ Вы ещё не подписались на {ch}!",
         "main_menu": (
             "⭐️ <b>Главное меню</b>\n\n"
             "🆔 ID: <code>{uid}</code>\n"
             "💰 Баланс: <b>{bal}</b>\n"
-            "⛏ Мины: <b>{mina:.2f} mina</b>\n"
-            "📈 1 GRAM (биржа 1:1): <b>{gram_p}</b>"
+            "📊 Биржевая цена 1 GRAM (1:1): <b>{gram_p}</b>\n"
+            "🟢 Цена покупки грамм (1г): <b>{buy_p}</b> (+2 000 сум / +$0.17)"
         ),
         "btn_nft": "💎 Купить NFT Gift",
         "btn_buy_gram": "🟢 Купить грамм",
@@ -352,60 +336,59 @@ TEXTS = {
         "profile_text": (
             "👤 <b>Профиль</b>\n\n"
             "🆔 ID: <code>{uid}</code>\n"
-            "💰 Баланс: <b>{bal}</b>\n"
-            "⛏ Баланс мин: <b>{mina:.2f} mina</b>"
+            "💰 Баланс: <b>{bal}</b>"
         ),
         "ask_topup": "💳 На какую сумму (в сум) хотите пополнить счёт? (Например: <code>50000</code>)",
-        "invalid_num": "❌ Введите положительное число (например: <code>50000</code> или <code>1</code>).",
+        "invalid_num": "❌ Введите положительное число (например: <code>1</code> или <code>50000</code>).",
         "topup_card_info": (
             "💳 <b>Пополнение счёта</b>\n\n"
             "💵 Сумма: <b>{amt:,.0f} сум</b>\n"
             "{cards_block}\n\n"
-            "После оплаты отправьте сюда <b>фото чека</b>. После подтверждения админом баланс пополнится."
+            "После оплаты отправьте <b>фото чека</b>. После подтверждения админом баланс пополнится."
         ),
         "topup_wait_receipt": "📸 Отправьте фото чека об оплате.",
-        "topup_sent": "✅ Чек отправлен администратору {admin}! Ожидайте подтверждения.",
+        "topup_sent": "✅ Чек отправлен {admin}. После подтверждения баланс пополнится.",
         "topup_approved": "✅ Ваш счёт пополнен на <b>{amt:,.0f} сум</b>!",
         "topup_rejected": "❌ Чек отклонён.",
         "ask_gram_buy": (
             "🟢 <b>Покупка грамм</b>\n"
-            "💰 Доступный баланс: <b>{bal}</b>\n"
-            "📈 1 GRAM по бирже (1:1): <b>{gram_p}</b> (+ 2 000 сум / 1 mina разница)\n"
+            "💰 Ваш баланс: <b>{bal}</b>\n"
+            "💵 Цена 1 GRAM: <b>{buy_p}</b> (+2 000 сум / +$0.17 выше биржи)\n"
             "Сколько GRAM хотите купить? (Например: <code>1</code> или <code>0.5</code>)"
         ),
         "insufficient_bal": (
             "❌ Недостаточно средств на балансе!\n"
             "Нужно: <b>{need}</b>\n"
             "Ваш баланс: <b>{bal}</b>\n"
-            "Укажите объём в пределах баланса или пополните счёт."
+            "Пополните счёт или введите объём в пределах баланса."
         ),
-        "gram_bought": (
-            "✅ Куплено <b>{grams} GRAM</b>!\n"
-            "💳 Списано: <b>{spent}</b>\n"
-            "⛏ Разница: <b>+{spread_mina:.2f} mina</b> ({spread_uzs:,.0f} сум)"
+        "admin_will_contact_buy": (
+            "📩 <b>Админ с вами свяжется</b>\n\n"
+            "✅ Заявка принята: <b>{grams} GRAM</b>\n"
+            "💳 Списано с баланса: <b>{spent}</b>\n"
+            "🤝 Админ ({admin}) свяжется с вами и выдаст GRAM."
         ),
         "ask_gram_sell": (
-            "🔴 <b>Продажа грамм</b>\n"
-            "📈 1 GRAM по бирже (1:1): <b>{gram_p}</b> (разница: -2 000 сум / 1 mina)\n"
+            "🔴 <b>Продажа грамм (Биржа 1:1)</b>\n"
+            "📊 Биржевая цена 1 GRAM: <b>{gram_p}</b>\n"
             "Сколько GRAM хотите продать? (Например: <code>1</code> или <code>0.5</code>)"
         ),
         "ask_sell_wallet": (
             "📬 <b>Оставьте ваш TON адрес</b>\n"
             "⚖️ Объём: <b>{grams} GRAM</b>\n"
-            "💵 Сумма расчёта (1:1 - разница): <b>{got}</b>\n\n"
-            "Отправьте ваш TON адрес — данные уйдут {admin}, и с вами свяжутся для выдачи TON."
+            "💵 Сумма по бирже (1:1): <b>{got}</b>"
         ),
         "invalid_wallet": "❌ Введите корректный TON адрес.",
-        "gram_sold": (
-            "✅ Заявка на продажу <b>{grams} GRAM</b> принята!\n"
+        "admin_will_contact_sell": (
+            "📩 <b>Админ с вами свяжется</b>\n\n"
+            "✅ Заявка отправлена: продажа <b>{grams} GRAM</b>\n"
             "📬 TON адрес: <code>{wallet}</code>\n"
-            "💵 Сумма расчёта: <b>{got}</b>\n"
-            "⛏ Разница: <b>-{spread_mina:.2f} mina</b> ({spread_uzs:,.0f} сум)\n"
-            "Данные отправлены в {ch} и {admin}. Администратор свяжется с вами."
+            "💵 Сумма (1:1): <b>{got}</b>\n"
+            "🤝 Админ ({admin}) свяжется с вами."
         ),
         "nft_title": (
             "💎 <b>Каталог NFT Gift ({count} шт.)</b>\n"
-            "⚠️ Покупка NFT только за <b>TON</b> и по договорённости с <b>{admin}</b>.\n"
+            "⚠️ Только за <b>TON</b> и по договорённости с <b>{admin}</b>.\n"
             "TON адрес: <code>{ton}</code>"
         ),
         "nft_selected": (
@@ -417,23 +400,23 @@ TEXTS = {
         "btn_order_nft": "📩 Заказать NFT",
         "btn_back": "⬅️ Назад",
         "nft_ordered": (
-            "✅ Заявка отправлена в личку <b>{admin}</b>!\n"
-            "Сделка проходит только в TON по договорённости с администратором."
+            "📩 <b>Админ с вами свяжется</b>\n\n"
+            "✅ Заявка на <b>{gift}</b> отправлена {admin}."
         ),
     },
     "en": {
         "choose_lang": "🌐 Choose language / Tilni tanlang / Выберите язык:",
-        "lang_set": "✅ Language set: English",
-        "sub_req": "⚠️ Subscribe to <b>{ch}</b> to continue to the next screen!",
+        "lang_set": "English selected",
+        "sub_req": "⚠️ Subscribe to <b>{ch}</b> to continue!",
         "btn_sub_channel": "📢 Subscribe to channel",
         "btn_check_sub": "✅ Check subscription",
-        "not_sub_yet": "❌ You haven't subscribed to {ch} yet! Join the channel first.",
+        "not_sub_yet": "❌ You haven't subscribed to {ch} yet!",
         "main_menu": (
             "⭐️ <b>Main Menu</b>\n\n"
             "🆔 ID: <code>{uid}</code>\n"
             "💰 Balance: <b>{bal}</b>\n"
-            "⛏ Mina: <b>{mina:.2f} mina</b>\n"
-            "📈 1 GRAM (1:1 market): <b>{gram_p}</b>"
+            "📊 1 GRAM market price (1:1): <b>{gram_p}</b>\n"
+            "🟢 Buy GRAM price (1g): <b>{buy_p}</b> (+2,000 UZS / +$0.17)"
         ),
         "btn_nft": "💎 Get NFT Gift",
         "btn_buy_gram": "🟢 Buy Gram",
@@ -444,60 +427,59 @@ TEXTS = {
         "profile_text": (
             "👤 <b>Profile</b>\n\n"
             "🆔 ID: <code>{uid}</code>\n"
-            "💰 Balance: <b>{bal}</b>\n"
-            "⛏ Mina balance: <b>{mina:.2f} mina</b>"
+            "💰 Balance: <b>{bal}</b>"
         ),
         "ask_topup": "💳 How much (in UZS) do you want to top up? (Example: <code>50000</code>)",
-        "invalid_num": "❌ Please enter a positive number (example: <code>50000</code> or <code>1</code>).",
+        "invalid_num": "❌ Enter a positive number (example: <code>1</code> or <code>50000</code>).",
         "topup_card_info": (
             "💳 <b>Top Up Balance</b>\n\n"
             "💵 Amount: <b>{amt:,.0f} UZS</b>\n"
             "{cards_block}\n\n"
-            "After payment, send a <b>payment receipt photo</b> here. Balance updates after admin approval."
+            "After payment, send a <b>receipt photo</b>. Balance updates after admin approval."
         ),
-        "topup_wait_receipt": "📸 Please send a photo of your payment receipt.",
-        "topup_sent": "✅ Receipt sent to {admin}! Wait for admin approval.",
+        "topup_wait_receipt": "📸 Send a photo of your payment receipt.",
+        "topup_sent": "✅ Receipt sent to {admin}. Balance updates after approval.",
         "topup_approved": "✅ Your balance has been topped up by <b>{amt:,.0f} UZS</b>!",
         "topup_rejected": "❌ Receipt rejected.",
         "ask_gram_buy": (
             "🟢 <b>Buy Gram</b>\n"
-            "💰 Available balance: <b>{bal}</b>\n"
-            "📈 1 GRAM market (1:1): <b>{gram_p}</b> (+ 2,000 UZS / 1 mina spread)\n"
+            "💰 Your balance: <b>{bal}</b>\n"
+            "💵 1 GRAM price: <b>{buy_p}</b> (+2,000 UZS / +$0.17 above market)\n"
             "How many GRAM do you want to buy? (Example: <code>1</code> or <code>0.5</code>)"
         ),
         "insufficient_bal": (
             "❌ Insufficient balance!\n"
             "Required: <b>{need}</b>\n"
             "Your balance: <b>{bal}</b>\n"
-            "Enter an amount within your balance or top up first."
+            "Top up your balance or enter a lower amount."
         ),
-        "gram_bought": (
-            "✅ Bought <b>{grams} GRAM</b>!\n"
+        "admin_will_contact_buy": (
+            "📩 <b>Admin will contact you</b>\n\n"
+            "✅ Order received: <b>{grams} GRAM</b>\n"
             "💳 Deducted: <b>{spent}</b>\n"
-            "⛏ Spread: <b>+{spread_mina:.2f} mina</b> ({spread_uzs:,.0f} UZS)"
+            "🤝 Admin ({admin}) will contact you and deliver GRAM."
         ),
         "ask_gram_sell": (
-            "🔴 <b>Sell Gram</b>\n"
-            "📈 1 GRAM market (1:1): <b>{gram_p}</b> (spread: -2,000 UZS / 1 mina)\n"
+            "🔴 <b>Sell Gram (1:1 Market)</b>\n"
+            "📊 1 GRAM market price: <b>{gram_p}</b>\n"
             "How many GRAM do you want to sell? (Example: <code>1</code> or <code>0.5</code>)"
         ),
         "ask_sell_wallet": (
             "📬 <b>Leave your TON address</b>\n"
             "⚖️ Amount: <b>{grams} GRAM</b>\n"
-            "💵 Calculated amount (1:1 - spread): <b>{got}</b>\n\n"
-            "Send your TON wallet address — details go to {admin} and they will contact you to deliver TON."
+            "💵 Market amount (1:1): <b>{got}</b>"
         ),
-        "invalid_wallet": "❌ Please enter a valid TON wallet address.",
-        "gram_sold": (
-            "✅ Sell request for <b>{grams} GRAM</b> submitted!\n"
+        "invalid_wallet": "❌ Enter a valid TON wallet address.",
+        "admin_will_contact_sell": (
+            "📩 <b>Admin will contact you</b>\n\n"
+            "✅ Request sent: sell <b>{grams} GRAM</b>\n"
             "📬 TON address: <code>{wallet}</code>\n"
-            "💵 Calculated amount: <b>{got}</b>\n"
-            "⛏ Spread: <b>-{spread_mina:.2f} mina</b> ({spread_uzs:,.0f} UZS)\n"
-            "Posted to {ch} and sent to {admin}. Admin will reach out."
+            "💵 Amount (1:1): <b>{got}</b>\n"
+            "🤝 Admin ({admin}) will contact you."
         ),
         "nft_title": (
             "💎 <b>NFT Gift Catalog ({count} items)</b>\n"
-            "⚠️ NFT purchase is <b>TON only</b> and by agreement with <b>{admin}</b>.\n"
+            "⚠️ <b>TON only</b> and by agreement with <b>{admin}</b>.\n"
             "TON address: <code>{ton}</code>"
         ),
         "nft_selected": (
@@ -509,8 +491,8 @@ TEXTS = {
         "btn_order_nft": "📩 Order NFT",
         "btn_back": "⬅️ Back",
         "nft_ordered": (
-            "✅ Your order has been sent to <b>{admin}</b>!\n"
-            "Trade happens in TON by agreement with the admin."
+            "📩 <b>Admin will contact you</b>\n\n"
+            "✅ Order for <b>{gift}</b> sent to {admin}."
         ),
     },
 }
@@ -524,8 +506,10 @@ def get_bal(uid: int) -> float:
     return user_balance_uzs.get(uid, 0.0)
 
 
-def get_mina(uid: int) -> float:
-    return user_mina.get(uid, 0.0)
+def calc_buy_uzs(grams: float, gram_market_uzs: float, usd_rate: float) -> float:
+    rate = usd_rate if usd_rate > 0 else DEFAULT_USD_RATE
+    markup_per_gram = max(BUY_MARKUP_UZS, BUY_MARKUP_USD * rate)
+    return grams * (gram_market_uzs + markup_per_gram)
 
 
 def fmt_money(uzs_amount: float, usd_rate: float) -> str:
@@ -543,11 +527,13 @@ def build_cards_block() -> str:
 
 
 async def is_subscribed(bot: Bot, uid: int) -> bool:
+    if uid == ADMIN_ID:
+        return True
     try:
         member = await bot.get_chat_member(chat_id=CHANNEL_USERNAME, user_id=uid)
         return member.status in {"member", "administrator", "creator"}
     except Exception as exc:
-        logging.warning("Obuna tekshiruvida xato: %s", exc)
+        logging.warning("Obuna tekshirishda xato: %s", exc)
         return False
 
 
@@ -555,7 +541,7 @@ async def post_to_channel(bot: Bot, text: str) -> None:
     try:
         await bot.send_message(chat_id=CHANNEL_USERNAME, text=text, parse_mode="HTML")
     except Exception as exc:
-        logging.warning("Kanalga xabar yuborilmadi (%s): %s", CHANNEL_USERNAME, exc)
+        logging.warning("Kanalga xabar ketmadi: %s", exc)
 
 
 def lang_kb() -> InlineKeyboardMarkup:
@@ -656,12 +642,13 @@ async def send_sub_prompt(bot: Bot, chat_id: int, uid: int) -> None:
 async def send_main(bot: Bot, chat_id: int, uid: int) -> None:
     lang = get_lang(uid)
     t = TEXTS[lang]
-    gram_p, usd_r = await refresh_market_prices()
+    gram_p, usd_r = await fetch_live_market()
+    buy_one_p = calc_buy_uzs(1.0, gram_p, usd_r)
     text = t["main_menu"].format(
         uid=uid,
         bal=fmt_money(get_bal(uid), usd_r),
-        mina=get_mina(uid),
         gram_p=fmt_money(gram_p, usd_r),
+        buy_p=fmt_money(buy_one_p, usd_r),
     )
     await bot.send_message(chat_id, text, parse_mode="HTML", reply_markup=main_kb(lang))
 
@@ -685,8 +672,7 @@ async def on_lang(callback: CallbackQuery, bot: Bot) -> None:
     if code in TEXTS:
         user_lang[uid] = code
     lang = get_lang(uid)
-    await callback.answer()
-    await callback.message.answer(TEXTS[lang]["lang_set"])
+    await callback.answer(TEXTS[lang]["lang_set"])
     if await is_subscribed(bot, uid):
         await send_main(bot, callback.message.chat.id, uid)
     else:
@@ -715,10 +701,10 @@ async def on_open_lang(callback: CallbackQuery) -> None:
 @dp.callback_query(F.data == "back_main")
 async def on_back_main(callback: CallbackQuery, bot: Bot) -> None:
     uid = callback.from_user.id
-    await callback.answer()
     if not await is_subscribed(bot, uid):
-        await send_sub_prompt(bot, callback.message.chat.id, uid)
+        await callback.answer(TEXTS[get_lang(uid)]["not_sub_yet"].format(ch=CHANNEL_USERNAME), show_alert=True)
         return
+    await callback.answer()
     await send_main(bot, callback.message.chat.id, uid)
 
 
@@ -726,18 +712,17 @@ async def on_back_main(callback: CallbackQuery, bot: Bot) -> None:
 async def on_open_profile(callback: CallbackQuery, bot: Bot) -> None:
     uid = callback.from_user.id
     if not await is_subscribed(bot, uid):
-        await callback.answer()
-        await send_sub_prompt(bot, callback.message.chat.id, uid)
+        await callback.answer(TEXTS[get_lang(uid)]["not_sub_yet"].format(ch=CHANNEL_USERNAME), show_alert=True)
         return
     lang = get_lang(uid)
     t = TEXTS[lang]
-    _, usd_r = await refresh_market_prices()
+    _, usd_r = await fetch_live_market()
     await callback.answer()
     kb = InlineKeyboardMarkup(
         inline_keyboard=[[InlineKeyboardButton(text=t["btn_back"], callback_data="back_main")]]
     )
     await callback.message.answer(
-        t["profile_text"].format(uid=uid, bal=fmt_money(get_bal(uid), usd_r), mina=get_mina(uid)),
+        t["profile_text"].format(uid=uid, bal=fmt_money(get_bal(uid), usd_r)),
         parse_mode="HTML",
         reply_markup=kb,
     )
@@ -747,8 +732,7 @@ async def on_open_profile(callback: CallbackQuery, bot: Bot) -> None:
 async def on_topup_start(callback: CallbackQuery, bot: Bot) -> None:
     uid = callback.from_user.id
     if not await is_subscribed(bot, uid):
-        await callback.answer()
-        await send_sub_prompt(bot, callback.message.chat.id, uid)
+        await callback.answer(TEXTS[get_lang(uid)]["not_sub_yet"].format(ch=CHANNEL_USERNAME), show_alert=True)
         return
     lang = get_lang(uid)
     user_state[uid] = {"step": "topup_amount"}
@@ -760,19 +744,18 @@ async def on_topup_start(callback: CallbackQuery, bot: Bot) -> None:
 async def on_gram_action(callback: CallbackQuery, bot: Bot) -> None:
     uid = callback.from_user.id
     if not await is_subscribed(bot, uid):
-        await callback.answer()
-        await send_sub_prompt(bot, callback.message.chat.id, uid)
+        await callback.answer(TEXTS[get_lang(uid)]["not_sub_yet"].format(ch=CHANNEL_USERNAME), show_alert=True)
         return
     lang = get_lang(uid)
     t = TEXTS[lang]
-    gram_p, usd_r = await refresh_market_prices()
+    gram_p, usd_r = await fetch_live_market()
     await callback.answer()
     if callback.data == "gram_buy":
         user_state[uid] = {"step": "gram_buy"}
         await callback.message.answer(
             t["ask_gram_buy"].format(
                 bal=fmt_money(get_bal(uid), usd_r),
-                gram_p=fmt_money(gram_p, usd_r),
+                buy_p=fmt_money(calc_buy_uzs(1.0, gram_p, usd_r), usd_r),
             ),
             parse_mode="HTML",
         )
@@ -788,8 +771,7 @@ async def on_gram_action(callback: CallbackQuery, bot: Bot) -> None:
 async def on_open_nft(callback: CallbackQuery, bot: Bot) -> None:
     uid = callback.from_user.id
     if not await is_subscribed(bot, uid):
-        await callback.answer()
-        await send_sub_prompt(bot, callback.message.chat.id, uid)
+        await callback.answer(TEXTS[get_lang(uid)]["not_sub_yet"].format(ch=CHANNEL_USERNAME), show_alert=True)
         return
     lang = get_lang(uid)
     t = TEXTS[lang]
@@ -833,23 +815,24 @@ async def on_order_nft(callback: CallbackQuery, bot: Bot) -> None:
 
     gift_name = NFT_GIFTS[gift_idx]
     uname = f"@{callback.from_user.username}" if callback.from_user.username else "yo'q"
-    admin_msg = (
-        f"💎 <b>Yangi NFT Gift buyurtmasi</b>\n"
-        f"🎁 Gift: <b>{gift_name}</b>\n"
-        f"👤 Xaridor ID: <code>{uid}</code> ({uname})\n"
-        f"💰 To‘lov: <b>Faqat TON</b> (kelishuv asosida)\n"
-        f"📬 TON manzil: <code>{TON_WALLET}</code>"
-    )
     try:
-        await bot.send_message(ADMIN_ID, admin_msg, parse_mode="HTML")
+        await bot.send_message(
+            ADMIN_ID,
+            f"💎 <b>NFT Gift buyurtmasi</b>\n"
+            f"🎁 Gift: <b>{gift_name}</b>\n"
+            f"👤 Xaridor ID: <code>{uid}</code> ({uname})\n"
+            f"💰 To‘lov: <b>Faqat TON</b> (kelishuv asosida)\n"
+            f"📬 TON manzil: <code>{TON_WALLET}</code>",
+            parse_mode="HTML",
+        )
     except Exception as exc:
-        logging.warning("Adminga NFT xabari yuborilmadi: %s", exc)
+        logging.warning("Adminga NFT xabari ketmadi: %s", exc)
 
     await post_to_channel(
         bot,
-        f"💎 <b>NFT Buyurtma</b>\n🎁 Gift: <b>{gift_name}</b>\n👤 Mijoz ID: <code>{uid}</code>\n🤝 Savdo: TON / kelishuv ({ADMIN_USERNAME})",
+        f"💎 <b>NFT Buyurtma</b>\n🎁 Gift: <b>{gift_name}</b>\n👤 Mijoz ID: <code>{uid}</code>\n🤝 Savdo: TON ({ADMIN_USERNAME})",
     )
-    await callback.message.answer(t["nft_ordered"].format(admin=ADMIN_USERNAME), parse_mode="HTML")
+    await callback.message.answer(t["nft_ordered"].format(gift=gift_name, admin=ADMIN_USERNAME), parse_mode="HTML")
     await send_main(bot, callback.message.chat.id, uid)
 
 
@@ -862,7 +845,7 @@ async def on_topup_ok(callback: CallbackQuery, bot: Bot) -> None:
     req = pending_topups.pop(req_id, None)
     await callback.answer()
     if not req:
-        await callback.message.answer("So‘rov topilmadi yoki allaqachon ko‘rib chiqilgan.")
+        await callback.message.answer("So‘rov topilmadi.")
         return
 
     target_uid = req["uid"]
@@ -879,8 +862,8 @@ async def on_topup_ok(callback: CallbackQuery, bot: Bot) -> None:
             TEXTS[get_lang(target_uid)]["topup_approved"].format(amt=amt),
             parse_mode="HTML",
         )
-    except Exception as exc:
-        logging.warning("Foydalanuvchiga tasdiq xabari bormadi: %s", exc)
+    except Exception:
+        pass
 
     await post_to_channel(
         bot,
@@ -944,7 +927,7 @@ async def on_photo(message: Message, bot: Bot) -> None:
             reply_markup=admin_kb,
         )
     except Exception as exc:
-        logging.warning("Adminga chek yuborilmadi: %s", exc)
+        logging.warning("Adminga chek ketmadi: %s", exc)
 
     await message.answer(t["topup_sent"].format(admin=ADMIN_USERNAME), parse_mode="HTML")
     await send_main(bot, message.chat.id, uid)
@@ -973,43 +956,37 @@ async def on_text(message: Message, bot: Bot) -> None:
 
         grams = st["grams"]
         got_uzs = st["got_uzs"]
-        spread_mina = st["spread_mina"]
-        spread_uzs = st["spread_uzs"]
-        _, usd_r = await refresh_market_prices()
+        _, usd_r = await fetch_live_market()
         user_state.pop(uid, None)
 
         uname = f"@{message.from_user.username}" if message.from_user.username else "yo'q"
         got_fmt = fmt_money(got_uzs, usd_r)
 
-        await message.answer(
-            t["gram_sold"].format(
-                grams=grams,
-                wallet=raw_text,
-                got=got_fmt,
-                spread_mina=spread_mina,
-                spread_uzs=spread_uzs,
-                ch=CHANNEL_USERNAME,
-                admin=ADMIN_USERNAME,
-            ),
-            parse_mode="HTML",
-        )
         try:
             await bot.send_message(
                 ADMIN_ID,
-                f"🔴 <b>GRAM Sotish arizasi</b>\n"
+                f"🔴 <b>GRAM Sotish arizasi (1:1 birja)</b>\n"
                 f"👤 Mijoz ID: <code>{uid}</code> ({uname})\n"
                 f"📬 Mijoz TON manzili: <code>{raw_text}</code>\n"
                 f"⚖️ Miqdor: <b>{grams} GRAM</b>\n"
-                f"💵 Hisoblangan summa (1:1 - farq): <b>{got_fmt}</b>\n"
-                f"⛏ Farq / Mina: <b>-{spread_mina:.2f} mina</b> ({spread_uzs:,.0f} so‘m)",
+                f"💵 Summa (1:1): <b>{got_fmt}</b>",
                 parse_mode="HTML",
             )
         except Exception as exc:
-            logging.warning("Adminga sotuv xabari bormadi: %s", exc)
+            logging.warning("Adminga sotuv xabari ketmadi: %s", exc)
 
         await post_to_channel(
             bot,
             f"🔴 <b>GRAM Sotildi</b>\n⚖️ Miqdor: <b>{grams} GRAM</b>\n👤 Mijoz ID: <code>{uid}</code>\n💵 Summa: <b>{got_fmt}</b>",
+        )
+        await message.answer(
+            t["admin_will_contact_sell"].format(
+                grams=grams,
+                wallet=raw_text,
+                got=got_fmt,
+                admin=ADMIN_USERNAME,
+            ),
+            parse_mode="HTML",
         )
         await send_main(bot, message.chat.id, uid)
         return
@@ -1030,12 +1007,10 @@ async def on_text(message: Message, bot: Bot) -> None:
         )
         return
 
-    gram_p, usd_r = await refresh_market_prices()
-    spread_mina = val * SPREAD_MINA
-    spread_uzs = spread_mina * MINA_VALUE_UZS
+    gram_p, usd_r = await fetch_live_market()
 
     if step == "gram_buy":
-        total_uzs = (val * gram_p) + spread_uzs
+        total_uzs = calc_buy_uzs(val, gram_p, usd_r)
         bal = get_bal(uid)
 
         if total_uzs > bal:
@@ -1050,40 +1025,48 @@ async def on_text(message: Message, bot: Bot) -> None:
 
         user_state.pop(uid, None)
         user_balance_uzs[uid] = bal - total_uzs
-        user_mina[uid] = get_mina(uid) + spread_mina
-
         spent_fmt = fmt_money(total_uzs, usd_r)
-        await message.answer(
-            t["gram_bought"].format(
-                grams=val,
-                spent=spent_fmt,
-                spread_mina=spread_mina,
-                spread_uzs=spread_uzs,
-            ),
-            parse_mode="HTML",
-        )
+        uname = f"@{message.from_user.username}" if message.from_user.username else "yo'q"
+
+        try:
+            await bot.send_message(
+                ADMIN_ID,
+                f"🟢 <b>GRAM Sotib olish buyurtmasi</b>\n"
+                f"👤 Xaridor ID: <code>{uid}</code> ({uname})\n"
+                f"⚖️ Miqdor: <b>{val} GRAM</b>\n"
+                f"💳 To‘langan summa: <b>{spent_fmt}</b>\n"
+                f"🤝 Admin grammini berishi kerak.",
+                parse_mode="HTML",
+            )
+        except Exception as exc:
+            logging.warning("Adminga xarid xabari ketmadi: %s", exc)
+
         await post_to_channel(
             bot,
             f"🟢 <b>GRAM Sotib olindi</b>\n⚖️ Miqdor: <b>{val} GRAM</b>\n👤 Mijoz ID: <code>{uid}</code>\n💵 Summa: <b>{spent_fmt}</b>",
+        )
+        await message.answer(
+            t["admin_will_contact_buy"].format(
+                grams=val,
+                spent=spent_fmt,
+                admin=ADMIN_USERNAME,
+            ),
+            parse_mode="HTML",
         )
         await send_main(bot, message.chat.id, uid)
         return
 
     if step == "gram_sell":
-        got_uzs = max(0.0, (val * gram_p) - spread_uzs)
-        user_mina[uid] = get_mina(uid) + spread_mina
+        got_uzs = val * gram_p
         user_state[uid] = {
             "step": "gram_sell_wallet",
             "grams": val,
             "got_uzs": got_uzs,
-            "spread_mina": spread_mina,
-            "spread_uzs": spread_uzs,
         }
         await message.answer(
             t["ask_sell_wallet"].format(
                 grams=val,
                 got=fmt_money(got_uzs, usd_r),
-                admin=ADMIN_USERNAME,
             ),
             parse_mode="HTML",
         )
