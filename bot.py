@@ -24,18 +24,15 @@ UZCARD_NUMBER = "5614681401815257"
 VISA_CARD_NUMBER = ""  # Keyinchalik Visa karta raqamini shu yerga qo'shamiz
 TON_WALLET = "UQA4qQ6E8Kf0vHXXCti_PzO71qXi7KiEeN5d71UO7xWiTL-w"
 
-# Birja narxi va ustama sozlamalari
-DEFAULT_GRAM_UZS = 15_000.0
-DEFAULT_USD_RATE = 12_800.0
-BUY_MARKUP_UZS = 2_000.0       # Foydalanuvchi gramm sotib olganda +2 000 so'm
-BUY_MARKUP_USD = 0.17          # Dollar ekvivalentida +$0.17
+# TONAPI GRAM rate manzili (kalitsiz ishlaydi)
+TONAPI_GRAM_RATES_URL = "https://tonapi.io/v2/rates?tokens=gram&currencies=usd,uzs"
 
-# Real API manzillari (bepul, kalitsiz)
-GECKO_GRAM_POOL_URL = (
-    "https://api.geckoterminal.com/api/v2/networks/ton/pools/"
-    "EQASBZLwa2vfdsgoDF2w96pdccBJJRxDNXXPUL7NMm0WdnMx"
-)
-CBU_RATES_URL = "https://cbu.uz/uz/arkhiv-kursov-valyut/json/"
+# Standart va ustama sozlamalari
+DEFAULT_GRAM_UZS = 12_300.0
+DEFAULT_GRAM_USD = 0.96
+DEFAULT_USD_UZS = 12_800.0
+BUY_MARKUP_USD = 0.17
+BUY_MARKUP_UZS = 2_000.0
 
 # 134 ta NFT gift (qizil bo'yalgan gift olib tashlangan)
 NFT_GIFTS = [
@@ -184,41 +181,47 @@ pending_topups: dict[int, dict] = {}
 
 market_state = {
     "gram_uzs": DEFAULT_GRAM_UZS,
-    "usd_rate": DEFAULT_USD_RATE,
+    "gram_usd": DEFAULT_GRAM_USD,
+    "usd_uzs": DEFAULT_USD_UZS,
 }
 
 
-async def fetch_live_market() -> tuple[float, float]:
-    usd_rate = market_state["usd_rate"]
-    gram_usd = None
-
+async def fetch_live_gram_rates() -> tuple[float, float, float]:
     timeout = aiohttp.ClientTimeout(total=6)
     try:
         async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.get(CBU_RATES_URL) as resp:
+            async with session.get(TONAPI_GRAM_RATES_URL) as resp:
                 if resp.status == 200:
                     data = await resp.json()
-                    for item in data:
-                        if item.get("Ccy") == "USD":
-                            usd_rate = float(item["Rate"])
-                            break
+                    rates = data.get("rates") or {}
+                    gram_data = rates.get("GRAM") or rates.get("gram") or {}
+                    prices = gram_data.get("prices") or {}
 
-            async with session.get(GECKO_GRAM_POOL_URL) as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    attrs = data.get("data", {}).get("attributes", {})
-                    price_str = attrs.get("base_token_price_usd")
-                    if price_str:
-                        gram_usd = float(price_str)
+                    uzs_raw = prices.get("UZS") if "UZS" in prices else prices.get("uzs")
+                    usd_raw = prices.get("USD") if "USD" in prices else prices.get("usd")
+
+                    gram_uzs = float(uzs_raw) if uzs_raw is not None else None
+                    gram_usd = float(usd_raw) if usd_raw is not None else None
+
+                    if gram_uzs and gram_uzs > 0:
+                        market_state["gram_uzs"] = gram_uzs
+                    if gram_usd and gram_usd > 0:
+                        market_state["gram_usd"] = gram_usd
+
+                    if gram_uzs and gram_usd and gram_usd > 0:
+                        market_state["usd_uzs"] = gram_uzs / gram_usd
+                    elif gram_uzs and gram_uzs > 0:
+                        market_state["gram_usd"] = gram_uzs / market_state["usd_uzs"]
+                    elif gram_usd and gram_usd > 0:
+                        market_state["gram_uzs"] = gram_usd * market_state["usd_uzs"]
     except Exception as exc:
-        logging.warning("Jonli birja API xatosi: %s", exc)
+        logging.warning("TonAPI GRAM narx xatosi: %s", exc)
 
-    if gram_usd and gram_usd > 0:
-        gram_uzs = gram_usd * usd_rate
-        market_state["gram_uzs"] = gram_uzs
-
-    market_state["usd_rate"] = usd_rate
-    return market_state["gram_uzs"], market_state["usd_rate"]
+    return (
+        market_state["gram_uzs"],
+        market_state["gram_usd"],
+        market_state["usd_uzs"],
+    )
 
 
 TEXTS = {
@@ -506,14 +509,13 @@ def get_bal(uid: int) -> float:
     return user_balance_uzs.get(uid, 0.0)
 
 
-def calc_buy_uzs(grams: float, gram_market_uzs: float, usd_rate: float) -> float:
-    rate = usd_rate if usd_rate > 0 else DEFAULT_USD_RATE
-    markup_per_gram = max(BUY_MARKUP_UZS, BUY_MARKUP_USD * rate)
-    return grams * (gram_market_uzs + markup_per_gram)
+def calc_buy_uzs(grams: float, gram_uzs: float, usd_uzs: float) -> float:
+    markup_uzs = max(BUY_MARKUP_UZS, BUY_MARKUP_USD * usd_uzs)
+    return grams * (gram_uzs + markup_uzs)
 
 
-def fmt_money(uzs_amount: float, usd_rate: float) -> str:
-    rate = usd_rate if usd_rate > 0 else DEFAULT_USD_RATE
+def fmt_money(uzs_amount: float, usd_uzs: float) -> str:
+    rate = usd_uzs if usd_uzs > 0 else DEFAULT_USD_UZS
     return f"{uzs_amount:,.0f} so'm (${uzs_amount / rate:,.2f})"
 
 
@@ -642,13 +644,13 @@ async def send_sub_prompt(bot: Bot, chat_id: int, uid: int) -> None:
 async def send_main(bot: Bot, chat_id: int, uid: int) -> None:
     lang = get_lang(uid)
     t = TEXTS[lang]
-    gram_p, usd_r = await fetch_live_market()
-    buy_one_p = calc_buy_uzs(1.0, gram_p, usd_r)
+    gram_uzs, _, usd_uzs = await fetch_live_gram_rates()
+    buy_one_uzs = calc_buy_uzs(1.0, gram_uzs, usd_uzs)
     text = t["main_menu"].format(
         uid=uid,
-        bal=fmt_money(get_bal(uid), usd_r),
-        gram_p=fmt_money(gram_p, usd_r),
-        buy_p=fmt_money(buy_one_p, usd_r),
+        bal=fmt_money(get_bal(uid), usd_uzs),
+        gram_p=fmt_money(gram_uzs, usd_uzs),
+        buy_p=fmt_money(buy_one_uzs, usd_uzs),
     )
     await bot.send_message(chat_id, text, parse_mode="HTML", reply_markup=main_kb(lang))
 
@@ -716,13 +718,13 @@ async def on_open_profile(callback: CallbackQuery, bot: Bot) -> None:
         return
     lang = get_lang(uid)
     t = TEXTS[lang]
-    _, usd_r = await fetch_live_market()
+    _, _, usd_uzs = await fetch_live_gram_rates()
     await callback.answer()
     kb = InlineKeyboardMarkup(
         inline_keyboard=[[InlineKeyboardButton(text=t["btn_back"], callback_data="back_main")]]
     )
     await callback.message.answer(
-        t["profile_text"].format(uid=uid, bal=fmt_money(get_bal(uid), usd_r)),
+        t["profile_text"].format(uid=uid, bal=fmt_money(get_bal(uid), usd_uzs)),
         parse_mode="HTML",
         reply_markup=kb,
     )
@@ -748,21 +750,21 @@ async def on_gram_action(callback: CallbackQuery, bot: Bot) -> None:
         return
     lang = get_lang(uid)
     t = TEXTS[lang]
-    gram_p, usd_r = await fetch_live_market()
+    gram_uzs, _, usd_uzs = await fetch_live_gram_rates()
     await callback.answer()
     if callback.data == "gram_buy":
         user_state[uid] = {"step": "gram_buy"}
         await callback.message.answer(
             t["ask_gram_buy"].format(
-                bal=fmt_money(get_bal(uid), usd_r),
-                buy_p=fmt_money(calc_buy_uzs(1.0, gram_p, usd_r), usd_r),
+                bal=fmt_money(get_bal(uid), usd_uzs),
+                buy_p=fmt_money(calc_buy_uzs(1.0, gram_uzs, usd_uzs), usd_uzs),
             ),
             parse_mode="HTML",
         )
     else:
         user_state[uid] = {"step": "gram_sell"}
         await callback.message.answer(
-            t["ask_gram_sell"].format(gram_p=fmt_money(gram_p, usd_r)),
+            t["ask_gram_sell"].format(gram_p=fmt_money(gram_uzs, usd_uzs)),
             parse_mode="HTML",
         )
 
@@ -956,11 +958,11 @@ async def on_text(message: Message, bot: Bot) -> None:
 
         grams = st["grams"]
         got_uzs = st["got_uzs"]
-        _, usd_r = await fetch_live_market()
+        _, _, usd_uzs = await fetch_live_gram_rates()
         user_state.pop(uid, None)
 
         uname = f"@{message.from_user.username}" if message.from_user.username else "yo'q"
-        got_fmt = fmt_money(got_uzs, usd_r)
+        got_fmt = fmt_money(got_uzs, usd_uzs)
 
         try:
             await bot.send_message(
@@ -1007,17 +1009,17 @@ async def on_text(message: Message, bot: Bot) -> None:
         )
         return
 
-    gram_p, usd_r = await fetch_live_market()
+    gram_uzs, _, usd_uzs = await fetch_live_gram_rates()
 
     if step == "gram_buy":
-        total_uzs = calc_buy_uzs(val, gram_p, usd_r)
+        total_uzs = calc_buy_uzs(val, gram_uzs, usd_uzs)
         bal = get_bal(uid)
 
         if total_uzs > bal:
             await message.answer(
                 t["insufficient_bal"].format(
-                    need=fmt_money(total_uzs, usd_r),
-                    bal=fmt_money(bal, usd_r),
+                    need=fmt_money(total_uzs, usd_uzs),
+                    bal=fmt_money(bal, usd_uzs),
                 ),
                 parse_mode="HTML",
             )
@@ -1025,7 +1027,7 @@ async def on_text(message: Message, bot: Bot) -> None:
 
         user_state.pop(uid, None)
         user_balance_uzs[uid] = bal - total_uzs
-        spent_fmt = fmt_money(total_uzs, usd_r)
+        spent_fmt = fmt_money(total_uzs, usd_uzs)
         uname = f"@{message.from_user.username}" if message.from_user.username else "yo'q"
 
         try:
@@ -1057,7 +1059,7 @@ async def on_text(message: Message, bot: Bot) -> None:
         return
 
     if step == "gram_sell":
-        got_uzs = val * gram_p
+        got_uzs = val * gram_uzs
         user_state[uid] = {
             "step": "gram_sell_wallet",
             "grams": val,
@@ -1066,7 +1068,7 @@ async def on_text(message: Message, bot: Bot) -> None:
         await message.answer(
             t["ask_sell_wallet"].format(
                 grams=val,
-                got=fmt_money(got_uzs, usd_r),
+                got=fmt_money(got_uzs, usd_uzs),
             ),
             parse_mode="HTML",
         )
