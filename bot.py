@@ -19,7 +19,7 @@ logging.basicConfig(level=logging.INFO)
 BOT_TOKEN = os.getenv("BOT_TOKEN", "")
 ADMIN_ID = 7074089722
 ADMIN_USERNAME = "@Skzpx"
-CHANNEL_USERNAME = "@tonferm"
+CHANNEL_USERNAME = "@tonfermsale"
 
 # To'lov kartalari va TON manzil (Visa uchun joy tashlab ketildi)
 UZCARD_NUMBER = "5614681401815257"
@@ -39,7 +39,7 @@ GECKO_GRAM_POOL_URL = (
 )
 CBU_RATES_URL = "https://cbu.uz/uz/arkhiv-kursov-valyut/json/"
 
-# 134 ta NFT gift (qizil bo'yalgan gift olib tashlangan)[span_10](start_span)[span_10](end_span)[span_11](start_span)[span_11](end_span)[span_12](start_span)[span_12](end_span)[span_13](start_span)[span_13](end_span)[span_14](start_span)[span_14](end_span)[span_15](start_span)[span_15](end_span)[span_16](start_span)[span_16](end_span)[span_17](start_span)[span_17](end_span)[span_18](start_span)[span_18](end_span)
+# 134 ta NFT gift (qizil bo'yalgan gift olib tashlangan)
 NFT_GIFTS = [
     "☕️ Coffee cup",
     "🔥 Torch",
@@ -227,7 +227,6 @@ async def refresh_market_prices(force: bool = False) -> tuple[float, float]:
     if gram_usd and gram_usd > 0:
         gram_uzs = gram_usd * usd_rate
     else:
-        # Birja tebranishiga o'xshash kichik real vaqt o'zgarishi
         delta = random.uniform(-0.012, 0.012)
         gram_uzs = max(100.0, market_cache["gram_uzs"] * (1.0 + delta))
 
