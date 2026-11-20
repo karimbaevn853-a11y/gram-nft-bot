@@ -291,6 +291,7 @@ TEXTS = {
         "btn_user_sell_uname": "📤 O‘z username’imni sotish",
         "stars_title": (
             "⭐ <b>Telegram Stars buyurtma</b>\n\n"
+            "💰 Balansingiz: <b>{bal}</b>\n"
             f"Minimal: <b>{MIN_STARS}</b>\n"
             f"Maksimal: <b>{MAX_STARS}</b>\n"
             "Kurs: <b>1$ = {rate:,} so'm</b>\n\n"
@@ -298,6 +299,12 @@ TEXTS = {
         ),
         "stars_uzs": "so'm",
         "stars_custom": "✏️ Boshqa miqdor kiritish",
+        "stars_insufficient": (
+            "❌ <b>Hisobingizda mablag‘ yetarli emas! Hisobingizni to‘ldiring!</b>\n\n"
+            "⭐ Tanlangan: <b>{stars} Stars</b>\n"
+            "💵 Kerakli summa: <b>{need}</b>\n"
+            "💰 Sizning balansingiz: <b>{bal}</b>"
+        ),
         "stars_selected": (
             "✅ Tanlandi: <b>{stars} Stars</b>\n"
             "💵 Narxi: <b>{uzs} so'm</b> (<b>${usd}</b>)\n\n"
@@ -310,7 +317,7 @@ TEXTS = {
             "🎉 <b>Buyurtmangiz qabul qilindi!</b>\n\n"
             "⭐ Miqdor: <b>{stars} Stars</b>\n"
             "👤 Qabul qiluvchi: <b>{target}</b>\n"
-            "💵 Summa: <b>{uzs} so'm</b> (<b>${usd}</b>)\n\n"
+            "💳 Hisobdan yechildi: <b>{uzs} so'm</b> (<b>${usd}</b>)\n\n"
             "Admin ({admin}) tez orada tekshirib, yuboradi."
         ),
         "stars_order_done": "✅ <b>{stars} Stars</b> ({target}) muvaffaqiyatli yuborildi!",
@@ -476,6 +483,7 @@ TEXTS = {
         "btn_user_sell_uname": "📤 Продать свой username",
         "stars_title": (
             "⭐ <b>Заказ Telegram Stars</b>\n\n"
+            "💰 Ваш баланс: <b>{bal}</b>\n"
             f"Минимум: <b>{MIN_STARS}</b>\n"
             f"Максимум: <b>{MAX_STARS}</b>\n"
             "Курс: <b>1$ = {rate:,} сум</b>\n\n"
@@ -483,6 +491,12 @@ TEXTS = {
         ),
         "stars_uzs": "сум",
         "stars_custom": "✏️ Ввести другое количество",
+        "stars_insufficient": (
+            "❌ <b>Недостаточно средств на балансе! Пополните счёт!</b>\n\n"
+            "⭐ Выбрано: <b>{stars} Stars</b>\n"
+            "💵 Нужно: <b>{need}</b>\n"
+            "💰 Ваш баланс: <b>{bal}</b>"
+        ),
         "stars_selected": (
             "✅ Выбрано: <b>{stars} Stars</b>\n"
             "💵 Цена: <b>{uzs} сум</b> (<b>${usd}</b>)\n\n"
@@ -495,7 +509,7 @@ TEXTS = {
             "🎉 <b>Ваш заказ принят!</b>\n\n"
             "⭐ Количество: <b>{stars} Stars</b>\n"
             "👤 Получатель: <b>{target}</b>\n"
-            "💵 Сумма: <b>{uzs} сум</b> (<b>${usd}</b>)\n\n"
+            "💳 Списано с баланса: <b>{uzs} сум</b> (<b>${usd}</b>)\n\n"
             "Администратор ({admin}) проверит и отправит в ближайшее время."
         ),
         "stars_order_done": "✅ <b>{stars} Stars</b> ({target}) успешно отправлены!",
@@ -661,6 +675,7 @@ TEXTS = {
         "btn_user_sell_uname": "📤 Sell my username",
         "stars_title": (
             "⭐ <b>Telegram Stars Order</b>\n\n"
+            "💰 Your balance: <b>{bal}</b>\n"
             f"Minimum: <b>{MIN_STARS}</b>\n"
             f"Maximum: <b>{MAX_STARS}</b>\n"
             "Rate: <b>1$ = {rate:,} UZS</b>\n\n"
@@ -668,6 +683,12 @@ TEXTS = {
         ),
         "stars_uzs": "UZS",
         "stars_custom": "✏️ Enter custom amount",
+        "stars_insufficient": (
+            "❌ <b>Insufficient balance! Please top up your balance!</b>\n\n"
+            "⭐ Selected: <b>{stars} Stars</b>\n"
+            "💵 Required: <b>{need}</b>\n"
+            "💰 Your balance: <b>{bal}</b>"
+        ),
         "stars_selected": (
             "✅ Selected: <b>{stars} Stars</b>\n"
             "💵 Price: <b>{uzs} UZS</b> (<b>${usd}</b>)\n\n"
@@ -680,7 +701,7 @@ TEXTS = {
             "🎉 <b>Your order has been received!</b>\n\n"
             "⭐ Amount: <b>{stars} Stars</b>\n"
             "👤 Recipient: <b>{target}</b>\n"
-            "💵 Price: <b>{uzs} UZS</b> (<b>${usd}</b>)\n\n"
+            "💳 Deducted from balance: <b>{uzs} UZS</b> (<b>${usd}</b>)\n\n"
             "Admin ({admin}) will review and send it shortly."
         ),
         "stars_order_done": "✅ <b>{stars} Stars</b> ({target}) have been sent!",
@@ -939,6 +960,16 @@ def stars_menu_kb(lang: str, usd_uzs: float) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
+def stars_insufficient_kb(lang: str) -> InlineKeyboardMarkup:
+    t = TEXTS[lang]
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text=t["btn_topup"], callback_data="topup_start")],
+            [InlineKeyboardButton(text=t["btn_back"], callback_data="open_stars")],
+        ]
+    )
+
+
 def admin_stars_order_kb(buyer_id: int, stars: int, lang: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
@@ -1112,6 +1143,57 @@ async def send_main(bot: Bot, chat_id: int, uid: int) -> None:
     await bot.send_message(chat_id, text, parse_mode="HTML", reply_markup=main_kb(lang, uid))
 
 
+async def start_stars_checkout(
+    bot: Bot,
+    chat_id: int,
+    uid: int,
+    stars: int,
+    uzs: int,
+    usd_uzs: float,
+    from_callback: CallbackQuery | None = None,
+) -> None:
+    lang = get_lang(uid)
+    t = TEXTS[lang]
+    bal = get_bal(uid)
+
+    if bal < uzs:
+        user_state.pop(uid, None)
+        msg_text = t["stars_insufficient"].format(
+            stars=stars,
+            need=fmt_money(uzs, usd_uzs),
+            bal=fmt_money(bal, usd_uzs),
+        )
+        if from_callback:
+            await from_callback.answer()
+            await from_callback.message.answer(
+                msg_text,
+                parse_mode="HTML",
+                reply_markup=stars_insufficient_kb(lang),
+            )
+        else:
+            await bot.send_message(
+                chat_id,
+                msg_text,
+                parse_mode="HTML",
+                reply_markup=stars_insufficient_kb(lang),
+            )
+        return
+
+    usd = stars_to_usd_str(uzs, usd_uzs)
+    user_state[uid] = {
+        "step": "stars_username",
+        "stars": stars,
+        "uzs": uzs,
+        "usd": usd,
+    }
+    text = t["stars_selected"].format(stars=stars, uzs=f"{uzs:,}", usd=usd)
+    if from_callback:
+        await from_callback.answer()
+        await from_callback.message.answer(text, parse_mode="HTML")
+    else:
+        await bot.send_message(chat_id, text, parse_mode="HTML")
+
+
 @dp.message(CommandStart())
 async def cmd_start(message: Message) -> None:
     uid = message.from_user.id
@@ -1163,7 +1245,7 @@ async def on_open_stars(callback: CallbackQuery, bot: Bot) -> None:
     rate_int = int(round(usd_uzs if usd_uzs > 0 else DEFAULT_USD_UZS))
     await callback.answer()
     await callback.message.answer(
-        t["stars_title"].format(rate=rate_int),
+        t["stars_title"].format(bal=fmt_money(get_bal(uid), usd_uzs), rate=rate_int),
         parse_mode="HTML",
         reply_markup=stars_menu_kb(lang, usd_uzs),
     )
@@ -1179,20 +1261,14 @@ async def on_stars_package(callback: CallbackQuery, bot: Bot) -> None:
     stars = int(stars_str)
     uzs = int(uzs_str)
     _, _, usd_uzs = await fetch_live_gram_rates()
-    usd = stars_to_usd_str(uzs, usd_uzs)
-
-    lang = get_lang(uid)
-    user_state[uid] = {
-        "step": "stars_username",
-        "stars": stars,
-        "uzs": uzs,
-        "usd": usd,
-    }
-    t = TEXTS[lang]
-    await callback.answer()
-    await callback.message.answer(
-        t["stars_selected"].format(stars=stars, uzs=f"{uzs:,}", usd=usd),
-        parse_mode="HTML",
+    await start_stars_checkout(
+        bot=bot,
+        chat_id=callback.message.chat.id,
+        uid=uid,
+        stars=stars,
+        uzs=uzs,
+        usd_uzs=usd_uzs,
+        from_callback=callback,
     )
 
 
@@ -1730,16 +1806,14 @@ async def on_text(message: Message, bot: Bot) -> None:
 
         uzs = calc_custom_stars_uzs(stars)
         _, _, usd_uzs = await fetch_live_gram_rates()
-        usd = stars_to_usd_str(uzs, usd_uzs)
-        user_state[uid] = {
-            "step": "stars_username",
-            "stars": stars,
-            "uzs": uzs,
-            "usd": usd,
-        }
-        await message.answer(
-            t["stars_selected"].format(stars=stars, uzs=f"{uzs:,}", usd=usd),
-            parse_mode="HTML",
+        await start_stars_checkout(
+            bot=bot,
+            chat_id=message.chat.id,
+            uid=uid,
+            stars=stars,
+            uzs=uzs,
+            usd_uzs=usd_uzs,
+            from_callback=None,
         )
         return
 
@@ -1751,6 +1825,23 @@ async def on_text(message: Message, bot: Bot) -> None:
         stars = st["stars"]
         uzs = st["uzs"]
         usd = st["usd"]
+        bal = get_bal(uid)
+        _, _, usd_uzs = await fetch_live_gram_rates()
+
+        if bal < uzs:
+            user_state.pop(uid, None)
+            await message.answer(
+                t["stars_insufficient"].format(
+                    stars=stars,
+                    need=fmt_money(uzs, usd_uzs),
+                    bal=fmt_money(bal, usd_uzs),
+                ),
+                parse_mode="HTML",
+                reply_markup=stars_insufficient_kb(lang),
+            )
+            return
+
+        user_balance_uzs[uid] = bal - uzs
         user_state.pop(uid, None)
 
         buyer_user = f"@{message.from_user.username}" if message.from_user.username else "yo'q"
