@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 import aiohttp
+from aiohttp import web
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import CommandStart
 from aiogram.types import (
@@ -19,9 +20,9 @@ ADMIN_ID = 7074089722
 ADMIN_USERNAME = "@Skzpx"
 CHANNEL_USERNAME = "@tonfermsale"
 
-# To'lov kartalari va TON manzil (Visa uchun joy tashlab ketildi)
+# To'lov kartalari va TON manzil (Visa keyingi safarga qoldirildi)
 UZCARD_NUMBER = "5614681401815257"
-VISA_CARD_NUMBER = ""  # Keyinchalik Visa karta raqamini shu yerga qo'shamiz
+VISA_CARD_NUMBER = ""
 TON_WALLET = "UQA4qQ6E8Kf0vHXXCti_PzO71qXi7KiEeN5d71UO7xWiTL-w"
 
 # TONAPI GRAM rate manzili (kalitsiz ishlaydi)
@@ -172,6 +173,13 @@ NFT_GIFTS = [
     "⚰️ Coffin",
 ]
 
+# Admin bot ichidan qo'sha oladigan username'lar ro'yxati
+# Har bir element: {"name": str, "price": str}
+username_listings: list[dict[str, str]] = [
+    {"name": "@tonferm", "price": "Kelishuv asosida"},
+    {"name": "@gramshop", "price": "Kelishuv asosida"},
+]
+
 dp = Dispatcher()
 
 user_lang: dict[int, str] = {}
@@ -240,11 +248,50 @@ TEXTS = {
             "🟢 Gramm sotib olish narxi (1g): <b>{buy_p}</b> (+2 000 so‘m / +$0.17)"
         ),
         "btn_nft": "💎 NFT Gift olish",
+        "btn_username": "🔗 Username savdosi",
         "btn_buy_gram": "🟢 Gramm sotib olish",
         "btn_sell_gram": "🔴 Gramm sotish",
         "btn_topup": "💳 Hisob to‘ldirish",
         "btn_profile": "👤 Profil",
+        "btn_rules": "📜 Qoidalar bilan tanishish",
         "btn_lang": "🌐 Til",
+        "btn_admin_add_uname": "➕ Username qo‘shish (Admin)",
+        "rules_text": (
+            "📜 <b>Qoidalar bilan tanishish</b>\n\n"
+            "1️⃣ Savdo <b>avtomatik emas</b> — barcha buyurtmalar, o‘tkazmalar va kelishuvlar <b>admin ({admin})</b> bilan kelishilgan holda amalga oshiriladi.\n"
+            "2️⃣ Majburiy kanal: <b>{ch}</b>.\n"
+            "3️⃣ <b>GRAM</b> sotish birja narxida (1:1), sotib olish esa +2 000 so‘m / +$0.17 ustama bilan hisoblanadi.\n"
+            "4️⃣ <b>NFT Gift</b> savdosi faqat <b>TON</b> orqali va <b>{admin}</b> bilan kelishuv asosida o‘tadi.\n"
+            "5️⃣ <b>Username savdosi</b> <b>TON</b> yoki <b>valyuta</b> (so‘m / dollar) orqali <b>{admin}</b> bilan kelishiladi."
+        ),
+        "username_catalog_title": (
+            "🔗 <b>Username savdosi</b>\n"
+            "💰 To‘lov usuli: <b>TON</b> yoki <b>Valyuta</b>\n"
+            "🤝 Savdo: <b>{admin}</b> bilan kelishilgan holda\n"
+            "📬 TON manzil: <code>{ton}</code>"
+        ),
+        "username_empty": "📭 Hozircha ro‘yxatda username yo‘q.",
+        "username_detail": (
+            "🔗 Username: <b>{uname}</b>\n"
+            "💵 Narx / izoh: <b>{price}</b>\n"
+            "💳 To‘lov: <b>TON</b> yoki <b>Valyuta</b>\n"
+            "📬 TON manzil: <code>{ton}</code>\n"
+            "🤝 Savdo: <b>{admin}</b> bilan kelishilgan holda"
+        ),
+        "btn_pay_ton": "💎 TON orqali olish",
+        "btn_pay_currency": "💵 Valyuta orqali olish",
+        "username_ordered": (
+            "📩 <b>Admin siz bilan bog‘lanadi</b>\n\n"
+            "✅ <b>{uname}</b> username bo‘yicha buyurtma (<b>{method}</b>) qabul qilindi.\n"
+            "🤝 Admin ({admin}) siz bilan bog‘lanadi."
+        ),
+        "ask_admin_uname": (
+            "➕ <b>Yangi username qo‘shish</b>\n\n"
+            "Format: <code>@username | Narx yoki izoh</code>\n"
+            "Masalan: <code>@fermton | 25 TON yoki 300 000 so'm</code>\n"
+            "(Narx yozmasangiz ham bo‘ladi: <code>@fermton</code>)"
+        ),
+        "admin_uname_added": "✅ Username qo‘shildi: <b>{uname}</b> ({price})",
         "profile_text": (
             "👤 <b>Profil</b>\n\n"
             "🆔 ID: <code>{uid}</code>\n"
@@ -331,11 +378,50 @@ TEXTS = {
             "🟢 Цена покупки грамм (1г): <b>{buy_p}</b> (+2 000 сум / +$0.17)"
         ),
         "btn_nft": "💎 Купить NFT Gift",
+        "btn_username": "🔗 Продажа Username",
         "btn_buy_gram": "🟢 Купить грамм",
         "btn_sell_gram": "🔴 Продать грамм",
         "btn_topup": "💳 Пополнить счёт",
         "btn_profile": "👤 Профиль",
+        "btn_rules": "📜 Ознакомиться с правилами",
         "btn_lang": "🌐 Язык",
+        "btn_admin_add_uname": "➕ Добавить Username (Админ)",
+        "rules_text": (
+            "📜 <b>Правила сервиса</b>\n\n"
+            "1️⃣ Сделки <b>не автоматические</b> — все заявки, переводы и условия согласуются с <b>админом ({admin})</b>.\n"
+            "2️⃣ Обязательный канал: <b>{ch}</b>.\n"
+            "3️⃣ Продажа <b>GRAM</b> по биржевой цене (1:1), покупка с наценкой +2 000 сум / +$0.17.\n"
+            "4️⃣ <b>NFT Gift</b> — только за <b>TON</b> по договорённости с <b>{admin}</b>.\n"
+            "5️⃣ <b>Username</b> — за <b>TON</b> или <b>валюту</b> (сум / доллар) по согласованию с <b>{admin}</b>."
+        ),
+        "username_catalog_title": (
+            "🔗 <b>Продажа Username</b>\n"
+            "💰 Оплата: <b>TON</b> или <b>Валюта</b>\n"
+            "🤝 Сделка: <b>по договорённости с {admin}</b>\n"
+            "📬 TON адрес: <code>{ton}</code>"
+        ),
+        "username_empty": "📭 Пока в списке нет ни одного username.",
+        "username_detail": (
+            "🔗 Username: <b>{uname}</b>\n"
+            "💵 Цена / описание: <b>{price}</b>\n"
+            "💳 Оплата: <b>TON</b> или <b>Валюта</b>\n"
+            "📬 TON адрес: <code>{ton}</code>\n"
+            "🤝 Сделка: <b>по договорённости с {admin}</b>"
+        ),
+        "btn_pay_ton": "💎 Оплатить в TON",
+        "btn_pay_currency": "💵 Оплатить в валюте",
+        "username_ordered": (
+            "📩 <b>Админ с вами свяжется</b>\n\n"
+            "✅ Заявка на <b>{uname}</b> (<b>{method}</b>) принята.\n"
+            "🤝 Админ ({admin}) свяжется с вами."
+        ),
+        "ask_admin_uname": (
+            "➕ <b>Добавление username</b>\n\n"
+            "Формат: <code>@username | Цена или описание</code>\n"
+            "Пример: <code>@fermton | 25 TON или 300 000 сум</code>\n"
+            "(Можно без цены: <code>@fermton</code>)"
+        ),
+        "admin_uname_added": "✅ Username добавлен: <b>{uname}</b> ({price})",
         "profile_text": (
             "👤 <b>Профиль</b>\n\n"
             "🆔 ID: <code>{uid}</code>\n"
@@ -422,11 +508,50 @@ TEXTS = {
             "🟢 Buy GRAM price (1g): <b>{buy_p}</b> (+2,000 UZS / +$0.17)"
         ),
         "btn_nft": "💎 Get NFT Gift",
+        "btn_username": "🔗 Username Trading",
         "btn_buy_gram": "🟢 Buy Gram",
         "btn_sell_gram": "🔴 Sell Gram",
         "btn_topup": "💳 Top up balance",
         "btn_profile": "👤 Profile",
+        "btn_rules": "📜 Read the Rules",
         "btn_lang": "🌐 Language",
+        "btn_admin_add_uname": "➕ Add Username (Admin)",
+        "rules_text": (
+            "📜 <b>Service Rules</b>\n\n"
+            "1️⃣ Deals are <b>not automatic</b> — all orders, transfers, and terms are handled <b>by agreement with admin ({admin})</b>.\n"
+            "2️⃣ Required channel: <b>{ch}</b>.\n"
+            "3️⃣ <b>GRAM</b> sell is 1:1 market price; buy includes +2,000 UZS / +$0.17 markup.\n"
+            "4️⃣ <b>NFT Gift</b> deals are <b>TON only</b> by agreement with <b>{admin}</b>.\n"
+            "5️⃣ <b>Username trading</b> is available in <b>TON</b> or <b>currency</b> (UZS / USD) by agreement with <b>{admin}</b>."
+        ),
+        "username_catalog_title": (
+            "🔗 <b>Username Trading</b>\n"
+            "💰 Payment: <b>TON</b> or <b>Currency</b>\n"
+            "🤝 Deal: <b>by agreement with {admin}</b>\n"
+            "📬 TON address: <code>{ton}</code>"
+        ),
+        "username_empty": "📭 No usernames listed yet.",
+        "username_detail": (
+            "🔗 Username: <b>{uname}</b>\n"
+            "💵 Price / info: <b>{price}</b>\n"
+            "💳 Payment: <b>TON</b> or <b>Currency</b>\n"
+            "📬 TON address: <code>{ton}</code>\n"
+            "🤝 Deal: <b>by agreement with {admin}</b>"
+        ),
+        "btn_pay_ton": "💎 Pay with TON",
+        "btn_pay_currency": "💵 Pay with Currency",
+        "username_ordered": (
+            "📩 <b>Admin will contact you</b>\n\n"
+            "✅ Order for <b>{uname}</b> (<b>{method}</b>) received.\n"
+            "🤝 Admin ({admin}) will contact you."
+        ),
+        "ask_admin_uname": (
+            "➕ <b>Add a new username</b>\n\n"
+            "Format: <code>@username | Price or note</code>\n"
+            "Example: <code>@fermton | 25 TON or 300,000 UZS</code>\n"
+            "(Price is optional: <code>@fermton</code>)"
+        ),
+        "admin_uname_added": "✅ Username added: <b>{uname}</b> ({price})",
         "profile_text": (
             "👤 <b>Profile</b>\n\n"
             "🆔 ID: <code>{uid}</code>\n"
@@ -569,20 +694,54 @@ def sub_kb(lang: str) -> InlineKeyboardMarkup:
     )
 
 
-def main_kb(lang: str) -> InlineKeyboardMarkup:
+def main_kb(lang: str, uid: int) -> InlineKeyboardMarkup:
+    t = TEXTS[lang]
+    rows: list[list[InlineKeyboardButton]] = [
+        [InlineKeyboardButton(text=t["btn_nft"], callback_data="open_nft_0")],
+        [InlineKeyboardButton(text=t["btn_username"], callback_data="open_unames")],
+        [
+            InlineKeyboardButton(text=t["btn_buy_gram"], callback_data="gram_buy"),
+            InlineKeyboardButton(text=t["btn_sell_gram"], callback_data="gram_sell"),
+        ],
+        [
+            InlineKeyboardButton(text=t["btn_topup"], callback_data="topup_start"),
+            InlineKeyboardButton(text=t["btn_profile"], callback_data="open_profile"),
+        ],
+        [
+            InlineKeyboardButton(text=t["btn_rules"], callback_data="open_rules"),
+            InlineKeyboardButton(text=t["btn_lang"], callback_data="open_lang"),
+        ],
+    ]
+    if uid == ADMIN_ID:
+        rows.append([InlineKeyboardButton(text=t["btn_admin_add_uname"], callback_data="admin_add_uname")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def username_catalog_kb(lang: str) -> InlineKeyboardMarkup:
+    t = TEXTS[lang]
+    rows: list[list[InlineKeyboardButton]] = []
+    for idx, item in enumerate(username_listings):
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=f"{item['name']} — {item['price']}",
+                    callback_data=f"pick_uname_{idx}",
+                )
+            ]
+        )
+    rows.append([InlineKeyboardButton(text=t["btn_back"], callback_data="back_main")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def username_pay_kb(lang: str, idx: int) -> InlineKeyboardMarkup:
     t = TEXTS[lang]
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text=t["btn_nft"], callback_data="open_nft_0")],
             [
-                InlineKeyboardButton(text=t["btn_buy_gram"], callback_data="gram_buy"),
-                InlineKeyboardButton(text=t["btn_sell_gram"], callback_data="gram_sell"),
+                InlineKeyboardButton(text=t["btn_pay_ton"], callback_data=f"order_uname_{idx}_ton"),
+                InlineKeyboardButton(text=t["btn_pay_currency"], callback_data=f"order_uname_{idx}_cur"),
             ],
-            [
-                InlineKeyboardButton(text=t["btn_topup"], callback_data="topup_start"),
-                InlineKeyboardButton(text=t["btn_profile"], callback_data="open_profile"),
-            ],
-            [InlineKeyboardButton(text=t["btn_lang"], callback_data="open_lang")],
+            [InlineKeyboardButton(text=t["btn_back"], callback_data="open_unames")],
         ]
     )
 
@@ -652,7 +811,7 @@ async def send_main(bot: Bot, chat_id: int, uid: int) -> None:
         gram_p=fmt_money(gram_uzs, usd_uzs),
         buy_p=fmt_money(buy_one_uzs, usd_uzs),
     )
-    await bot.send_message(chat_id, text, parse_mode="HTML", reply_markup=main_kb(lang))
+    await bot.send_message(chat_id, text, parse_mode="HTML", reply_markup=main_kb(lang, uid))
 
 
 @dp.message(CommandStart())
@@ -698,6 +857,125 @@ async def on_open_lang(callback: CallbackQuery) -> None:
     uid = callback.from_user.id
     await callback.answer()
     await callback.message.answer(TEXTS[get_lang(uid)]["choose_lang"], reply_markup=lang_kb())
+
+
+@dp.callback_query(F.data == "open_rules")
+async def on_open_rules(callback: CallbackQuery, bot: Bot) -> None:
+    uid = callback.from_user.id
+    if not await is_subscribed(bot, uid):
+        await callback.answer(TEXTS[get_lang(uid)]["not_sub_yet"].format(ch=CHANNEL_USERNAME), show_alert=True)
+        return
+    lang = get_lang(uid)
+    t = TEXTS[lang]
+    await callback.answer()
+    kb = InlineKeyboardMarkup(
+        inline_keyboard=[[InlineKeyboardButton(text=t["btn_back"], callback_data="back_main")]]
+    )
+    await callback.message.answer(
+        t["rules_text"].format(admin=ADMIN_USERNAME, ch=CHANNEL_USERNAME),
+        parse_mode="HTML",
+        reply_markup=kb,
+    )
+
+
+@dp.callback_query(F.data == "open_unames")
+async def on_open_unames(callback: CallbackQuery, bot: Bot) -> None:
+    uid = callback.from_user.id
+    if not await is_subscribed(bot, uid):
+        await callback.answer(TEXTS[get_lang(uid)]["not_sub_yet"].format(ch=CHANNEL_USERNAME), show_alert=True)
+        return
+    lang = get_lang(uid)
+    t = TEXTS[lang]
+    await callback.answer()
+    if not username_listings:
+        kb = InlineKeyboardMarkup(
+            inline_keyboard=[[InlineKeyboardButton(text=t["btn_back"], callback_data="back_main")]]
+        )
+        await callback.message.answer(t["username_empty"], parse_mode="HTML", reply_markup=kb)
+        return
+    await callback.message.answer(
+        t["username_catalog_title"].format(admin=ADMIN_USERNAME, ton=TON_WALLET),
+        parse_mode="HTML",
+        reply_markup=username_catalog_kb(lang),
+    )
+
+
+@dp.callback_query(F.data.startswith("pick_uname_"))
+async def on_pick_uname(callback: CallbackQuery) -> None:
+    idx = int(callback.data.split("_")[-1])
+    uid = callback.from_user.id
+    lang = get_lang(uid)
+    t = TEXTS[lang]
+    if idx < 0 or idx >= len(username_listings):
+        await callback.answer()
+        return
+    item = username_listings[idx]
+    await callback.answer()
+    await callback.message.answer(
+        t["username_detail"].format(
+            uname=item["name"],
+            price=item["price"],
+            ton=TON_WALLET,
+            admin=ADMIN_USERNAME,
+        ),
+        parse_mode="HTML",
+        reply_markup=username_pay_kb(lang, idx),
+    )
+
+
+@dp.callback_query(F.data.startswith("order_uname_"))
+async def on_order_uname(callback: CallbackQuery, bot: Bot) -> None:
+    parts = callback.data.split("_")
+    idx = int(parts[2])
+    pay_code = parts[3]
+    uid = callback.from_user.id
+    lang = get_lang(uid)
+    t = TEXTS[lang]
+    await callback.answer()
+    if idx < 0 or idx >= len(username_listings):
+        return
+
+    item = username_listings[idx]
+    method_label = t["btn_pay_ton"] if pay_code == "ton" else t["btn_pay_currency"]
+    uname = f"@{callback.from_user.username}" if callback.from_user.username else "yo'q"
+
+    try:
+        await bot.send_message(
+            ADMIN_ID,
+            f"🔗 <b>Username savdosi buyurtmasi</b>\n"
+            f"🏷 Username: <b>{item['name']}</b> ({item['price']})\n"
+            f"💳 To‘lov usuli: <b>{method_label}</b>\n"
+            f"👤 Xaridor ID: <code>{uid}</code> ({uname})\n"
+            f"📬 TON manzil: <code>{TON_WALLET}</code>",
+            parse_mode="HTML",
+        )
+    except Exception as exc:
+        logging.warning("Adminga username buyurtmasi ketmadi: %s", exc)
+
+    await post_to_channel(
+        bot,
+        f"🔗 <b>Username Buyurtma</b>\n🏷 Username: <b>{item['name']}</b>\n💳 To‘lov: <b>{method_label}</b>\n👤 Mijoz ID: <code>{uid}</code>\n🤝 Admin: {ADMIN_USERNAME}",
+    )
+    await callback.message.answer(
+        t["username_ordered"].format(
+            uname=item["name"],
+            method=method_label,
+            admin=ADMIN_USERNAME,
+        ),
+        parse_mode="HTML",
+    )
+    await send_main(bot, callback.message.chat.id, uid)
+
+
+@dp.callback_query(F.data == "admin_add_uname")
+async def on_admin_add_uname(callback: CallbackQuery) -> None:
+    uid = callback.from_user.id
+    if uid != ADMIN_ID:
+        await callback.answer()
+        return
+    user_state[uid] = {"step": "admin_add_uname"}
+    await callback.answer()
+    await callback.message.answer(TEXTS[get_lang(uid)]["ask_admin_uname"], parse_mode="HTML")
 
 
 @dp.callback_query(F.data == "back_main")
@@ -947,6 +1225,27 @@ async def on_text(message: Message, bot: Bot) -> None:
     step = st.get("step")
     raw_text = message.text.strip()
 
+    if step == "admin_add_uname" and uid == ADMIN_ID:
+        user_state.pop(uid, None)
+        if "|" in raw_text:
+            left, right = raw_text.split("|", 1)
+            uname_clean = left.strip()
+            price_clean = right.strip() or "Kelishuv asosida"
+        else:
+            uname_clean = raw_text
+            price_clean = "Kelishuv asosida"
+
+        if not uname_clean.startswith("@"):
+            uname_clean = f"@{uname_clean}"
+
+        username_listings.append({"name": uname_clean, "price": price_clean})
+        await message.answer(
+            t["admin_uname_added"].format(uname=uname_clean, price=price_clean),
+            parse_mode="HTML",
+        )
+        await send_main(bot, message.chat.id, uid)
+        return
+
     if step == "topup_receipt":
         await message.answer(t["topup_wait_receipt"])
         return
@@ -1074,9 +1373,24 @@ async def on_text(message: Message, bot: Bot) -> None:
         )
 
 
+async def healthcheck(request: web.Request) -> web.Response:
+    return web.Response(text="OK")
+
+
+async def start_web_server() -> None:
+    app = web.Application()
+    app.router.add_get("/", healthcheck)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    port = int(os.getenv("PORT", 8080))
+    site = web.TCPSite(runner, "0.0.0.0", port)
+    await site.start()
+
+
 async def main() -> None:
     if not BOT_TOKEN:
         raise RuntimeError("BOT_TOKEN muhit o'zgaruvchisi (Render Environment) o'rnatilmagan!")
+    await start_web_server()
     bot = Bot(token=BOT_TOKEN)
     await dp.start_polling(bot)
 
