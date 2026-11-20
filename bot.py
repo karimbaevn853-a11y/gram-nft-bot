@@ -20,9 +20,11 @@ ADMIN_ID = 7074089722
 ADMIN_USERNAME = "@Skzpx"
 CHANNEL_USERNAME = "@tonfermsale"
 
-# To'lov kartalari va TON manzil (Visa keyingi safarga qoldirildi)
+# To'lov kartalari va TON manzil
 UZCARD_NUMBER = "5614681401815257"
-VISA_CARD_NUMBER = ""
+UZCARD_CARD_HOLDER = "Karimbaev Nursultan"
+VISA_CARD_NUMBER = "4195 2500 5235 8247"
+VISA_CARD_HOLDER = "Karimbaev Nursultan"
 TON_WALLET = "UQA4qQ6E8Kf0vHXXCti_PzO71qXi7KiEeN5d71UO7xWiTL-w"
 
 # TONAPI GRAM rate manzili (kalitsiz ishlaydi)
@@ -729,9 +731,11 @@ def fmt_money(uzs_amount: float, usd_uzs: float) -> str:
 def build_cards_block() -> str:
     lines = []
     if UZCARD_NUMBER:
-        lines.append(f"🏦 Uzcard: <code>{UZCARD_NUMBER}</code>")
+        holder_part = f" — <b>{UZCARD_CARD_HOLDER}</b>" if UZCARD_CARD_HOLDER else ""
+        lines.append(f"🏦 Uzcard: <code>{UZCARD_NUMBER}</code>{holder_part}")
     if VISA_CARD_NUMBER:
-        lines.append(f"💳 Visa: <code>{VISA_CARD_NUMBER}</code>")
+        holder_part = f" — <b>{VISA_CARD_HOLDER}</b>" if VISA_CARD_HOLDER else ""
+        lines.append(f"💳 Visa: <code>{VISA_CARD_NUMBER}</code>{holder_part}")
     return "\n".join(lines) if lines else "🏦 Karta ma'lumoti sozlanmoqda"
 
 
