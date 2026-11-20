@@ -20,23 +20,16 @@ ADMIN_ID = 7074089722
 ADMIN_USERNAME = "@Skzpx"
 CHANNEL_USERNAME = "@tonfermsale"
 
-# Telegram Stars sozlamalari (Minimal 50, Maksimal 10000; 50 Stars = 9,800 so'm, qolganlari -100 so'm)
+# Telegram Stars sozlamalari (Minimal 50, Maksimal 2500; rasmdagi narxdan 100 so'm arzon)[span_8](start_span)[span_8](end_span)
 MIN_STARS = 50
-MAX_STARS = 10000
+MAX_STARS = 2500
 STARS_PACKAGES: list[tuple[int, int]] = [
-    (50, 9800),
-    (75, 14750),
-    (100, 19700),
-    (150, 29600),
-    (250, 49400),
-    (350, 69200),
-    (500, 98900),
-    (750, 148400),
-    (1000, 197900),
-    (1500, 296900),
-    (2500, 494900),
-    (5000, 989900),
-    (10000, 1979900),
+    (50, 10400),
+    (100, 20900),
+    (250, 52400),
+    (500, 104900),
+    (1000, 209900),
+    (2500, 524900),
 ]
 
 # To'lov kartalari va TON manzil
@@ -869,8 +862,8 @@ def calc_custom_stars_uzs(stars: int) -> int:
     for s, p in STARS_PACKAGES:
         if s == stars:
             return p
-    unit = 196 if stars < 100 else 198
-    return max(9800, stars * unit - 100)
+    # Rasmda 1 Star = 210 so'm, shundan 100 so'm arzon[span_9](start_span)[span_9](end_span)
+    return max(10400, stars * 210 - 100)
 
 
 def build_cards_block() -> str:
