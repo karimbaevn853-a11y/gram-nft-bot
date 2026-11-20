@@ -173,11 +173,21 @@ NFT_GIFTS = [
     "⚰️ Coffin",
 ]
 
-# Admin bot ichidan qo'sha oladigan username'lar ro'yxati
-# Har bir element: {"name": str, "price": str}
-username_listings: list[dict[str, str]] = [
-    {"name": "@tonferm", "price": "Kelishuv asosida"},
-    {"name": "@gramshop", "price": "Kelishuv asosida"},
+# Admin va foydalanuvchilar qo'shadigan umumiy username'lar ro'yxati
+# Har bir element: {"name": str, "price": str, "seller_id": int, "seller_tag": str}
+username_listings: list[dict] = [
+    {
+        "name": "@tonferm",
+        "price": "Kelishuv asosida",
+        "seller_id": ADMIN_ID,
+        "seller_tag": f"Admin ({ADMIN_USERNAME})",
+    },
+    {
+        "name": "@gramshop",
+        "price": "Kelishuv asosida",
+        "seller_id": ADMIN_ID,
+        "seller_tag": f"Admin ({ADMIN_USERNAME})",
+    },
 ]
 
 dp = Dispatcher()
@@ -256,42 +266,66 @@ TEXTS = {
         "btn_rules": "📜 Qoidalar bilan tanishish",
         "btn_lang": "🌐 Til",
         "btn_admin_add_uname": "➕ Username qo‘shish (Admin)",
+        "btn_admin_del_uname": "🗑 Username o‘chirish (Admin)",
+        "btn_user_sell_uname": "📤 O‘z username’imni sotish",
         "rules_text": (
             "📜 <b>Qoidalar bilan tanishish</b>\n\n"
             "1️⃣ Savdo <b>avtomatik emas</b> — barcha buyurtmalar, o‘tkazmalar va kelishuvlar <b>admin ({admin})</b> bilan kelishilgan holda amalga oshiriladi.\n"
             "2️⃣ Majburiy kanal: <b>{ch}</b>.\n"
             "3️⃣ <b>GRAM</b> sotish birja narxida (1:1), sotib olish esa +2 000 so‘m / +$0.17 ustama bilan hisoblanadi.\n"
             "4️⃣ <b>NFT Gift</b> savdosi faqat <b>TON</b> orqali va <b>{admin}</b> bilan kelishuv asosida o‘tadi.\n"
-            "5️⃣ <b>Username savdosi</b> <b>TON</b> yoki <b>valyuta</b> (so‘m / dollar) orqali <b>{admin}</b> bilan kelishiladi."
+            "5️⃣ <b>Username savdosi</b> <b>TON</b> yoki <b>valyuta</b> (so‘m / dollar) orqali <b>{admin} garantligi</b> ostida o‘tkaziladi.\n"
+            "6️⃣ Foydalanuvchi o‘z username’ini sotuvga qo‘yib sotganda, <b>admin ({admin}) garant bo‘lib beradi</b> va sotuvchi olgan foydadan <b>5% garant komissiyasi</b> olinadi."
         ),
         "username_catalog_title": (
             "🔗 <b>Username savdosi</b>\n"
             "💰 To‘lov usuli: <b>TON</b> yoki <b>Valyuta</b>\n"
-            "🤝 Savdo: <b>{admin}</b> bilan kelishilgan holda\n"
-            "📬 TON manzil: <code>{ton}</code>"
+            "🛡 Garant: <b>Admin ({admin})</b> — sotuvchi foydasidan <b>5%</b> komissiya\n"
+            "📬 TON manzil: <code>{ton}</code>\n\n"
+            "Ro‘yxatdan tanlang yoki o‘z username’ingizni sotuvga qo‘ying:"
         ),
-        "username_empty": "📭 Hozircha ro‘yxatda username yo‘q.",
+        "username_empty": (
+            "📭 Hozircha ro‘yxatda username yo‘q.\n"
+            "🛡 <b>Admin ({admin}) garantligi</b> (5% komissiya) bilan o‘z username’ingizni sotuvga qo‘yishingiz mumkin:"
+        ),
         "username_detail": (
             "🔗 Username: <b>{uname}</b>\n"
             "💵 Narx / izoh: <b>{price}</b>\n"
+            "👤 Sotuvchi: <b>{seller}</b>\n"
+            "🛡 Garant: <b>Admin ({admin})</b> (5% komissiya)\n"
             "💳 To‘lov: <b>TON</b> yoki <b>Valyuta</b>\n"
-            "📬 TON manzil: <code>{ton}</code>\n"
-            "🤝 Savdo: <b>{admin}</b> bilan kelishilgan holda"
+            "📬 TON manzil: <code>{ton}</code>"
         ),
         "btn_pay_ton": "💎 TON orqali olish",
         "btn_pay_currency": "💵 Valyuta orqali olish",
         "username_ordered": (
             "📩 <b>Admin siz bilan bog‘lanadi</b>\n\n"
             "✅ <b>{uname}</b> username bo‘yicha buyurtma (<b>{method}</b>) qabul qilindi.\n"
-            "🤝 Admin ({admin}) siz bilan bog‘lanadi."
+            "🛡 Garant: Admin ({admin}) siz va sotuvchi bilan bog‘lanadi."
+        ),
+        "ask_user_sell_uname": (
+            "📤 <b>O‘z username’ingizni sotuvga qo‘yish</b>\n\n"
+            "🛡 Savdo <b>admin ({admin}) garantligi</b> ostida xavfsiz o‘tadi. Sotilganda olgan foydangizdan <b>5% garant komissiyasi</b> olinadi.\n\n"
+            "Sotmoqchi bo‘lgan username va narxingizni yozing:\n"
+            "Format: <code>@username | Narx (TON yoki valyuta)</code>\n"
+            "Masalan: <code>@meningnick | 20 TON yoki 250 000 so'm</code>"
+        ),
+        "user_uname_listed": (
+            "✅ Username umumiy savdo ro‘yxatiga qo‘shildi!\n\n"
+            "🔗 Username: <b>{uname}</b>\n"
+            "💵 Narx: <b>{price}</b>\n"
+            "🛡 Garant: <b>Admin ({admin})</b> (sotuv foydasidan 5%)\n"
+            "Endi u barcha foydalanuvchilarga <b>Username savdosi</b> bo‘limida ko‘rinadi."
         ),
         "ask_admin_uname": (
-            "➕ <b>Yangi username qo‘shish</b>\n\n"
+            "➕ <b>Yangi username qo‘shish (Admin)</b>\n\n"
             "Format: <code>@username | Narx yoki izoh</code>\n"
-            "Masalan: <code>@fermton | 25 TON yoki 300 000 so'm</code>\n"
-            "(Narx yozmasangiz ham bo‘ladi: <code>@fermton</code>)"
+            "Masalan: <code>@fermton | 25 TON yoki 300 000 so'm</code>"
         ),
         "admin_uname_added": "✅ Username qo‘shildi: <b>{uname}</b> ({price})",
+        "admin_del_uname_title": "🗑 <b>O‘chirish uchun username’ni tanlang:</b>",
+        "admin_del_uname_empty": "📭 O‘chirish uchun ro‘yxatda username yo‘q.",
+        "admin_uname_deleted": "🗑 O‘chirildi: <b>{uname}</b>",
         "profile_text": (
             "👤 <b>Profil</b>\n\n"
             "🆔 ID: <code>{uid}</code>\n"
@@ -386,42 +420,66 @@ TEXTS = {
         "btn_rules": "📜 Ознакомиться с правилами",
         "btn_lang": "🌐 Язык",
         "btn_admin_add_uname": "➕ Добавить Username (Админ)",
+        "btn_admin_del_uname": "🗑 Удалить Username (Админ)",
+        "btn_user_sell_uname": "📤 Продать свой username",
         "rules_text": (
             "📜 <b>Правила сервиса</b>\n\n"
             "1️⃣ Сделки <b>не автоматические</b> — все заявки, переводы и условия согласуются с <b>админом ({admin})</b>.\n"
             "2️⃣ Обязательный канал: <b>{ch}</b>.\n"
             "3️⃣ Продажа <b>GRAM</b> по биржевой цене (1:1), покупка с наценкой +2 000 сум / +$0.17.\n"
             "4️⃣ <b>NFT Gift</b> — только за <b>TON</b> по договорённости с <b>{admin}</b>.\n"
-            "5️⃣ <b>Username</b> — за <b>TON</b> или <b>валюту</b> (сум / доллар) по согласованию с <b>{admin}</b>."
+            "5️⃣ <b>Продажа Username</b> проходит за <b>TON</b> или <b>валюту</b> под <b>гарантством админа ({admin})</b>.\n"
+            "6️⃣ Когда пользователь выставляет и продаёт свой username, <b>админ ({admin}) выступает гарантом</b>, а с прибыли продавца удерживается <b>5% комиссии гаранта</b>."
         ),
         "username_catalog_title": (
             "🔗 <b>Продажа Username</b>\n"
             "💰 Оплата: <b>TON</b> или <b>Валюта</b>\n"
-            "🤝 Сделка: <b>по договорённости с {admin}</b>\n"
-            "📬 TON адрес: <code>{ton}</code>"
+            "🛡 Гарант: <b>Админ ({admin})</b> — комиссия <b>5%</b> с прибыли продавца\n"
+            "📬 TON адрес: <code>{ton}</code>\n\n"
+            "Выберите из списка или выставите свой username на продажу:"
         ),
-        "username_empty": "📭 Пока в списке нет ни одного username.",
+        "username_empty": (
+            "📭 Пока в списке нет ни одного username.\n"
+            "🛡 Вы можете выставить свой username под <b>гарантством админа ({admin})</b> (комиссия 5%):"
+        ),
         "username_detail": (
             "🔗 Username: <b>{uname}</b>\n"
             "💵 Цена / описание: <b>{price}</b>\n"
+            "👤 Продавец: <b>{seller}</b>\n"
+            "🛡 Гарант: <b>Админ ({admin})</b> (комиссия 5%)\n"
             "💳 Оплата: <b>TON</b> или <b>Валюта</b>\n"
-            "📬 TON адрес: <code>{ton}</code>\n"
-            "🤝 Сделка: <b>по договорённости с {admin}</b>"
+            "📬 TON адрес: <code>{ton}</code>"
         ),
         "btn_pay_ton": "💎 Оплатить в TON",
         "btn_pay_currency": "💵 Оплатить в валюте",
         "username_ordered": (
             "📩 <b>Админ с вами свяжется</b>\n\n"
             "✅ Заявка на <b>{uname}</b> (<b>{method}</b>) принята.\n"
-            "🤝 Админ ({admin}) свяжется с вами."
+            "🛡 Гарант: Админ ({admin}) свяжется с вами и продавцом."
+        ),
+        "ask_user_sell_uname": (
+            "📤 <b>Выставить свой username на продажу</b>\n\n"
+            "🛡 Сделка проходит безопасно под <b>гарантством админа ({admin})</b>. При продаже удерживается <b>5% комиссии гаранта</b> с вашей прибыли.\n\n"
+            "Отправьте username и цену:\n"
+            "Формат: <code>@username | Цена (TON или валюта)</code>\n"
+            "Пример: <code>@mynick | 20 TON или 250 000 сум</code>"
+        ),
+        "user_uname_listed": (
+            "✅ Username добавлен в общий каталог!\n\n"
+            "🔗 Username: <b>{uname}</b>\n"
+            "💵 Цена: <b>{price}</b>\n"
+            "🛡 Гарант: <b>Админ ({admin})</b> (5% с прибыли)\n"
+            "Теперь он виден всем в разделе <b>Продажа Username</b>."
         ),
         "ask_admin_uname": (
-            "➕ <b>Добавление username</b>\n\n"
+            "➕ <b>Добавление username (Админ)</b>\n\n"
             "Формат: <code>@username | Цена или описание</code>\n"
-            "Пример: <code>@fermton | 25 TON или 300 000 сум</code>\n"
-            "(Можно без цены: <code>@fermton</code>)"
+            "Пример: <code>@fermton | 25 TON или 300 000 сум</code>"
         ),
         "admin_uname_added": "✅ Username добавлен: <b>{uname}</b> ({price})",
+        "admin_del_uname_title": "🗑 <b>Выберите username для удаления:</b>",
+        "admin_del_uname_empty": "📭 В списке нет username для удаления.",
+        "admin_uname_deleted": "🗑 Удалено: <b>{uname}</b>",
         "profile_text": (
             "👤 <b>Профиль</b>\n\n"
             "🆔 ID: <code>{uid}</code>\n"
@@ -516,42 +574,66 @@ TEXTS = {
         "btn_rules": "📜 Read the Rules",
         "btn_lang": "🌐 Language",
         "btn_admin_add_uname": "➕ Add Username (Admin)",
+        "btn_admin_del_uname": "🗑 Delete Username (Admin)",
+        "btn_user_sell_uname": "📤 Sell my username",
         "rules_text": (
             "📜 <b>Service Rules</b>\n\n"
             "1️⃣ Deals are <b>not automatic</b> — all orders, transfers, and terms are handled <b>by agreement with admin ({admin})</b>.\n"
             "2️⃣ Required channel: <b>{ch}</b>.\n"
             "3️⃣ <b>GRAM</b> sell is 1:1 market price; buy includes +2,000 UZS / +$0.17 markup.\n"
             "4️⃣ <b>NFT Gift</b> deals are <b>TON only</b> by agreement with <b>{admin}</b>.\n"
-            "5️⃣ <b>Username trading</b> is available in <b>TON</b> or <b>currency</b> (UZS / USD) by agreement with <b>{admin}</b>."
+            "5️⃣ <b>Username trading</b> is available in <b>TON</b> or <b>currency</b> under <b>admin ({admin}) escrow/guarantee</b>.\n"
+            "6️⃣ When a user lists and sells their own username, <b>admin ({admin}) acts as guarantor</b> and takes a <b>5% escrow fee</b> from the seller's profit."
         ),
         "username_catalog_title": (
             "🔗 <b>Username Trading</b>\n"
             "💰 Payment: <b>TON</b> or <b>Currency</b>\n"
-            "🤝 Deal: <b>by agreement with {admin}</b>\n"
-            "📬 TON address: <code>{ton}</code>"
+            "🛡 Escrow / Guarantor: <b>Admin ({admin})</b> — <b>5%</b> fee from seller profit\n"
+            "📬 TON address: <code>{ton}</code>\n\n"
+            "Pick from the list or list your own username for sale:"
         ),
-        "username_empty": "📭 No usernames listed yet.",
+        "username_empty": (
+            "📭 No usernames listed yet.\n"
+            "🛡 You can list your username under <b>admin ({admin}) guarantee</b> (5% fee):"
+        ),
         "username_detail": (
             "🔗 Username: <b>{uname}</b>\n"
             "💵 Price / info: <b>{price}</b>\n"
+            "👤 Seller: <b>{seller}</b>\n"
+            "🛡 Guarantor: <b>Admin ({admin})</b> (5% fee)\n"
             "💳 Payment: <b>TON</b> or <b>Currency</b>\n"
-            "📬 TON address: <code>{ton}</code>\n"
-            "🤝 Deal: <b>by agreement with {admin}</b>"
+            "📬 TON address: <code>{ton}</code>"
         ),
         "btn_pay_ton": "💎 Pay with TON",
         "btn_pay_currency": "💵 Pay with Currency",
         "username_ordered": (
             "📩 <b>Admin will contact you</b>\n\n"
             "✅ Order for <b>{uname}</b> (<b>{method}</b>) received.\n"
-            "🤝 Admin ({admin}) will contact you."
+            "🛡 Guarantor: Admin ({admin}) will contact you and the seller."
+        ),
+        "ask_user_sell_uname": (
+            "📤 <b>List your username for sale</b>\n\n"
+            "🛡 The deal is protected by <b>admin ({admin}) guarantee</b>. A <b>5% escrow fee</b> applies to your profit upon sale.\n\n"
+            "Send your username and price:\n"
+            "Format: <code>@username | Price (TON or currency)</code>\n"
+            "Example: <code>@mynick | 20 TON or 250,000 UZS</code>"
+        ),
+        "user_uname_listed": (
+            "✅ Your username is now listed in the marketplace!\n\n"
+            "🔗 Username: <b>{uname}</b>\n"
+            "💵 Price: <b>{price}</b>\n"
+            "🛡 Guarantor: <b>Admin ({admin})</b> (5% profit fee)\n"
+            "It is now visible to everyone under <b>Username Trading</b>."
         ),
         "ask_admin_uname": (
-            "➕ <b>Add a new username</b>\n\n"
+            "➕ <b>Add a new username (Admin)</b>\n\n"
             "Format: <code>@username | Price or note</code>\n"
-            "Example: <code>@fermton | 25 TON or 300,000 UZS</code>\n"
-            "(Price is optional: <code>@fermton</code>)"
+            "Example: <code>@fermton | 25 TON or 300,000 UZS</code>"
         ),
         "admin_uname_added": "✅ Username added: <b>{uname}</b> ({price})",
+        "admin_del_uname_title": "🗑 <b>Select a username to remove:</b>",
+        "admin_del_uname_empty": "📭 No usernames available to remove.",
+        "admin_uname_deleted": "🗑 Removed: <b>{uname}</b>",
         "profile_text": (
             "👤 <b>Profile</b>\n\n"
             "🆔 ID: <code>{uid}</code>\n"
@@ -713,7 +795,12 @@ def main_kb(lang: str, uid: int) -> InlineKeyboardMarkup:
         ],
     ]
     if uid == ADMIN_ID:
-        rows.append([InlineKeyboardButton(text=t["btn_admin_add_uname"], callback_data="admin_add_uname")])
+        rows.append(
+            [
+                InlineKeyboardButton(text=t["btn_admin_add_uname"], callback_data="admin_add_uname"),
+                InlineKeyboardButton(text=t["btn_admin_del_uname"], callback_data="admin_del_uname"),
+            ]
+        )
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
@@ -726,6 +813,23 @@ def username_catalog_kb(lang: str) -> InlineKeyboardMarkup:
                 InlineKeyboardButton(
                     text=f"{item['name']} — {item['price']}",
                     callback_data=f"pick_uname_{idx}",
+                )
+            ]
+        )
+    rows.append([InlineKeyboardButton(text=t["btn_user_sell_uname"], callback_data="user_sell_uname")])
+    rows.append([InlineKeyboardButton(text=t["btn_back"], callback_data="back_main")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def admin_del_uname_kb(lang: str) -> InlineKeyboardMarkup:
+    t = TEXTS[lang]
+    rows: list[list[InlineKeyboardButton]] = []
+    for idx, item in enumerate(username_listings):
+        rows.append(
+            [
+                InlineKeyboardButton(
+                    text=f"❌ {item['name']} ({item['seller_tag']})",
+                    callback_data=f"del_uname_idx_{idx}",
                 )
             ]
         )
@@ -889,14 +993,36 @@ async def on_open_unames(callback: CallbackQuery, bot: Bot) -> None:
     await callback.answer()
     if not username_listings:
         kb = InlineKeyboardMarkup(
-            inline_keyboard=[[InlineKeyboardButton(text=t["btn_back"], callback_data="back_main")]]
+            inline_keyboard=[
+                [InlineKeyboardButton(text=t["btn_user_sell_uname"], callback_data="user_sell_uname")],
+                [InlineKeyboardButton(text=t["btn_back"], callback_data="back_main")],
+            ]
         )
-        await callback.message.answer(t["username_empty"], parse_mode="HTML", reply_markup=kb)
+        await callback.message.answer(
+            t["username_empty"].format(admin=ADMIN_USERNAME),
+            parse_mode="HTML",
+            reply_markup=kb,
+        )
         return
     await callback.message.answer(
         t["username_catalog_title"].format(admin=ADMIN_USERNAME, ton=TON_WALLET),
         parse_mode="HTML",
         reply_markup=username_catalog_kb(lang),
+    )
+
+
+@dp.callback_query(F.data == "user_sell_uname")
+async def on_user_sell_uname(callback: CallbackQuery, bot: Bot) -> None:
+    uid = callback.from_user.id
+    if not await is_subscribed(bot, uid):
+        await callback.answer(TEXTS[get_lang(uid)]["not_sub_yet"].format(ch=CHANNEL_USERNAME), show_alert=True)
+        return
+    lang = get_lang(uid)
+    user_state[uid] = {"step": "user_sell_uname"}
+    await callback.answer()
+    await callback.message.answer(
+        TEXTS[lang]["ask_user_sell_uname"].format(admin=ADMIN_USERNAME),
+        parse_mode="HTML",
     )
 
 
@@ -915,6 +1041,7 @@ async def on_pick_uname(callback: CallbackQuery) -> None:
         t["username_detail"].format(
             uname=item["name"],
             price=item["price"],
+            seller=item["seller_tag"],
             ton=TON_WALLET,
             admin=ADMIN_USERNAME,
         ),
@@ -937,15 +1064,17 @@ async def on_order_uname(callback: CallbackQuery, bot: Bot) -> None:
 
     item = username_listings[idx]
     method_label = t["btn_pay_ton"] if pay_code == "ton" else t["btn_pay_currency"]
-    uname = f"@{callback.from_user.username}" if callback.from_user.username else "yo'q"
+    buyer_tag = f"@{callback.from_user.username}" if callback.from_user.username else "yo'q"
 
     try:
         await bot.send_message(
             ADMIN_ID,
-            f"🔗 <b>Username savdosi buyurtmasi</b>\n"
+            f"🔗 <b>Username savdosi buyurtmasi (Garant 5%)</b>\n"
             f"🏷 Username: <b>{item['name']}</b> ({item['price']})\n"
+            f"👤 Sotuvchi: <b>{item['seller_tag']}</b> (ID: <code>{item['seller_id']}</code>)\n"
+            f"🛒 Xaridor ID: <code>{uid}</code> ({buyer_tag})\n"
             f"💳 To‘lov usuli: <b>{method_label}</b>\n"
-            f"👤 Xaridor ID: <code>{uid}</code> ({uname})\n"
+            f"🛡 Garant komissiyasi: <b>Sotuvchi foydasidan 5%</b>\n"
             f"📬 TON manzil: <code>{TON_WALLET}</code>",
             parse_mode="HTML",
         )
@@ -954,7 +1083,7 @@ async def on_order_uname(callback: CallbackQuery, bot: Bot) -> None:
 
     await post_to_channel(
         bot,
-        f"🔗 <b>Username Buyurtma</b>\n🏷 Username: <b>{item['name']}</b>\n💳 To‘lov: <b>{method_label}</b>\n👤 Mijoz ID: <code>{uid}</code>\n🤝 Admin: {ADMIN_USERNAME}",
+        f"🔗 <b>Username Buyurtma</b>\n🏷 Username: <b>{item['name']}</b>\n💳 To‘lov: <b>{method_label}</b>\n👤 Xaridor ID: <code>{uid}</code>\n🛡 Garant: {ADMIN_USERNAME} (5%)",
     )
     await callback.message.answer(
         t["username_ordered"].format(
@@ -976,6 +1105,58 @@ async def on_admin_add_uname(callback: CallbackQuery) -> None:
     user_state[uid] = {"step": "admin_add_uname"}
     await callback.answer()
     await callback.message.answer(TEXTS[get_lang(uid)]["ask_admin_uname"], parse_mode="HTML")
+
+
+@dp.callback_query(F.data == "admin_del_uname")
+async def on_admin_del_uname(callback: CallbackQuery) -> None:
+    uid = callback.from_user.id
+    if uid != ADMIN_ID:
+        await callback.answer()
+        return
+    lang = get_lang(uid)
+    t = TEXTS[lang]
+    await callback.answer()
+    if not username_listings:
+        kb = InlineKeyboardMarkup(
+            inline_keyboard=[[InlineKeyboardButton(text=t["btn_back"], callback_data="back_main")]]
+        )
+        await callback.message.answer(t["admin_del_uname_empty"], parse_mode="HTML", reply_markup=kb)
+        return
+    await callback.message.answer(
+        t["admin_del_uname_title"],
+        parse_mode="HTML",
+        reply_markup=admin_del_uname_kb(lang),
+    )
+
+
+@dp.callback_query(F.data.startswith("del_uname_idx_"))
+async def on_del_uname_idx(callback: CallbackQuery) -> None:
+    uid = callback.from_user.id
+    if uid != ADMIN_ID:
+        await callback.answer()
+        return
+    idx = int(callback.data.split("_")[-1])
+    lang = get_lang(uid)
+    t = TEXTS[lang]
+    await callback.answer()
+    if idx < 0 or idx >= len(username_listings):
+        return
+    removed = username_listings.pop(idx)
+    await callback.message.answer(
+        t["admin_uname_deleted"].format(uname=removed["name"]),
+        parse_mode="HTML",
+    )
+    if username_listings:
+        await callback.message.answer(
+            t["admin_del_uname_title"],
+            parse_mode="HTML",
+            reply_markup=admin_del_uname_kb(lang),
+        )
+    else:
+        kb = InlineKeyboardMarkup(
+            inline_keyboard=[[InlineKeyboardButton(text=t["btn_back"], callback_data="back_main")]]
+        )
+        await callback.message.answer(t["admin_del_uname_empty"], parse_mode="HTML", reply_markup=kb)
 
 
 @dp.callback_query(F.data == "back_main")
@@ -1238,9 +1419,66 @@ async def on_text(message: Message, bot: Bot) -> None:
         if not uname_clean.startswith("@"):
             uname_clean = f"@{uname_clean}"
 
-        username_listings.append({"name": uname_clean, "price": price_clean})
+        username_listings.append(
+            {
+                "name": uname_clean,
+                "price": price_clean,
+                "seller_id": ADMIN_ID,
+                "seller_tag": f"Admin ({ADMIN_USERNAME})",
+            }
+        )
         await message.answer(
             t["admin_uname_added"].format(uname=uname_clean, price=price_clean),
+            parse_mode="HTML",
+        )
+        await send_main(bot, message.chat.id, uid)
+        return
+
+    if step == "user_sell_uname":
+        user_state.pop(uid, None)
+        if "|" in raw_text:
+            left, right = raw_text.split("|", 1)
+            uname_clean = left.strip()
+            price_clean = right.strip() or "Kelishuv asosida"
+        else:
+            uname_clean = raw_text
+            price_clean = "Kelishuv asosida"
+
+        if not uname_clean.startswith("@"):
+            uname_clean = f"@{uname_clean}"
+
+        seller_tag = (
+            f"@{message.from_user.username} (ID: {uid})"
+            if message.from_user.username
+            else f"ID: {uid}"
+        )
+        username_listings.append(
+            {
+                "name": uname_clean,
+                "price": price_clean,
+                "seller_id": uid,
+                "seller_tag": seller_tag,
+            }
+        )
+        try:
+            await bot.send_message(
+                ADMIN_ID,
+                f"📤 <b>Yangi foydalanuvchi username’i sotuvga qo‘yildi</b>\n"
+                f"🔗 Username: <b>{uname_clean}</b>\n"
+                f"💵 Narx: <b>{price_clean}</b>\n"
+                f"👤 Sotuvchi: <b>{seller_tag}</b>\n"
+                f"🛡 Garant komissiyasi: <b>Sotuvchi foydasidan 5%</b>",
+                parse_mode="HTML",
+            )
+        except Exception as exc:
+            logging.warning("Adminga yangi username xabari ketmadi: %s", exc)
+
+        await message.answer(
+            t["user_uname_listed"].format(
+                uname=uname_clean,
+                price=price_clean,
+                admin=ADMIN_USERNAME,
+            ),
             parse_mode="HTML",
         )
         await send_main(bot, message.chat.id, uid)
