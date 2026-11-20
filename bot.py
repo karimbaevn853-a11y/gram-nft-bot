@@ -176,7 +176,6 @@ NFT_GIFTS = [
 ]
 
 # Admin va foydalanuvchilar qo'shadigan umumiy username'lar ro'yxati
-# Har bir element: {"name": str, "price": str, "seller_id": int, "seller_tag": str}
 username_listings: list[dict] = [
     {
         "name": "@tonferm",
@@ -270,6 +269,11 @@ TEXTS = {
         "btn_admin_add_uname": "➕ Username qo‘shish (Admin)",
         "btn_admin_del_uname": "🗑 Username o‘chirish (Admin)",
         "btn_user_sell_uname": "📤 O‘z username’imni sotish",
+        "choose_topup_curr": "💳 <b>Hisobni qaysi valyutada to‘ldirmoqchisiz?</b>",
+        "btn_curr_uzs": "🇺🇿 So‘m (UZS)",
+        "btn_curr_usd": "🇺🇸 Dollar (USD)",
+        "ask_topup_uzs": "💳 Necha <b>so‘m (UZS)</b> hisob to‘ldirmoqchisiz? (Masalan: <code>50000</code>)",
+        "ask_topup_usd": "💳 Necha <b>dollar (USD)</b> hisob to‘ldirmoqchisiz? (Masalan: <code>10</code> yoki <code>5.5</code>)",
         "rules_text": (
             "📜 <b>Qoidalar bilan tanishish</b>\n\n"
             "1️⃣ Savdo <b>avtomatik emas</b> — barcha buyurtmalar, o‘tkazmalar va kelishuvlar <b>admin ({admin})</b> bilan kelishilgan holda amalga oshiriladi.\n"
@@ -333,17 +337,16 @@ TEXTS = {
             "🆔 ID: <code>{uid}</code>\n"
             "💰 Balans: <b>{bal}</b>"
         ),
-        "ask_topup": "💳 Necha so‘m hisob to‘ldirmoqchisiz? (Masalan: <code>50000</code>)",
         "invalid_num": "❌ 0 dan katta son kiriting (masalan: <code>1</code> yoki <code>50000</code>).",
         "topup_card_info": (
             "💳 <b>Hisob to‘ldirish</b>\n\n"
-            "💵 Summa: <b>{amt:,.0f} so‘m</b>\n"
+            "💵 Summa: <b>{amt_display}</b>\n"
             "{cards_block}\n\n"
             "To‘lov qilgach, <b>chek rasmini</b> yuboring. Admin tasdiqlagach hisobingiz to‘ladi."
         ),
         "topup_wait_receipt": "📸 To‘lov chekining rasmini yuboring.",
         "topup_sent": "✅ Chek {admin} ga yuborildi. Tasdiqlangach hisobingiz to‘ladi.",
-        "topup_approved": "✅ Hisobingiz <b>{amt:,.0f} so‘m</b> ga to‘ldirildi!",
+        "topup_approved": "✅ Hisobingiz <b>{amt_display}</b> ga to‘ldirildi!",
         "topup_rejected": "❌ To‘lov cheki rad etildi.",
         "ask_gram_buy": (
             "🟢 <b>Gramm sotib olish</b>\n"
@@ -424,6 +427,11 @@ TEXTS = {
         "btn_admin_add_uname": "➕ Добавить Username (Админ)",
         "btn_admin_del_uname": "🗑 Удалить Username (Админ)",
         "btn_user_sell_uname": "📤 Продать свой username",
+        "choose_topup_curr": "💳 <b>В какой валюте хотите пополнить счёт?</b>",
+        "btn_curr_uzs": "🇺🇿 Сум (UZS)",
+        "btn_curr_usd": "🇺🇸 Доллар (USD)",
+        "ask_topup_uzs": "💳 На какую сумму в <b>сумах (UZS)</b> хотите пополнить счёт? (Например: <code>50000</code>)",
+        "ask_topup_usd": "💳 На какую сумму в <b>долларах (USD)</b> хотите пополнить счёт? (Например: <code>10</code> или <code>5.5</code>)",
         "rules_text": (
             "📜 <b>Правила сервиса</b>\n\n"
             "1️⃣ Сделки <b>не автоматические</b> — все заявки, переводы и условия согласуются с <b>админом ({admin})</b>.\n"
@@ -487,17 +495,16 @@ TEXTS = {
             "🆔 ID: <code>{uid}</code>\n"
             "💰 Баланс: <b>{bal}</b>"
         ),
-        "ask_topup": "💳 На какую сумму (в сум) хотите пополнить счёт? (Например: <code>50000</code>)",
         "invalid_num": "❌ Введите положительное число (например: <code>1</code> или <code>50000</code>).",
         "topup_card_info": (
             "💳 <b>Пополнение счёта</b>\n\n"
-            "💵 Сумма: <b>{amt:,.0f} сум</b>\n"
+            "💵 Сумма: <b>{amt_display}</b>\n"
             "{cards_block}\n\n"
             "После оплаты отправьте <b>фото чека</b>. После подтверждения админом баланс пополнится."
         ),
         "topup_wait_receipt": "📸 Отправьте фото чека об оплате.",
         "topup_sent": "✅ Чек отправлен {admin}. После подтверждения баланс пополнится.",
-        "topup_approved": "✅ Ваш счёт пополнен на <b>{amt:,.0f} сум</b>!",
+        "topup_approved": "✅ Ваш счёт пополнен на <b>{amt_display}</b>!",
         "topup_rejected": "❌ Чек отклонён.",
         "ask_gram_buy": (
             "🟢 <b>Покупка грамм</b>\n"
@@ -578,6 +585,11 @@ TEXTS = {
         "btn_admin_add_uname": "➕ Add Username (Admin)",
         "btn_admin_del_uname": "🗑 Delete Username (Admin)",
         "btn_user_sell_uname": "📤 Sell my username",
+        "choose_topup_curr": "💳 <b>Which currency do you want to top up in?</b>",
+        "btn_curr_uzs": "🇺🇿 UZS (So'm)",
+        "btn_curr_usd": "🇺🇸 USD (Dollar)",
+        "ask_topup_uzs": "💳 How much in <b>UZS</b> do you want to top up? (Example: <code>50000</code>)",
+        "ask_topup_usd": "💳 How much in <b>USD</b> do you want to top up? (Example: <code>10</code> or <code>5.5</code>)",
         "rules_text": (
             "📜 <b>Service Rules</b>\n\n"
             "1️⃣ Deals are <b>not automatic</b> — all orders, transfers, and terms are handled <b>by agreement with admin ({admin})</b>.\n"
@@ -641,17 +653,16 @@ TEXTS = {
             "🆔 ID: <code>{uid}</code>\n"
             "💰 Balance: <b>{bal}</b>"
         ),
-        "ask_topup": "💳 How much (in UZS) do you want to top up? (Example: <code>50000</code>)",
         "invalid_num": "❌ Enter a positive number (example: <code>1</code> or <code>50000</code>).",
         "topup_card_info": (
             "💳 <b>Top Up Balance</b>\n\n"
-            "💵 Amount: <b>{amt:,.0f} UZS</b>\n"
+            "💵 Amount: <b>{amt_display}</b>\n"
             "{cards_block}\n\n"
             "After payment, send a <b>receipt photo</b>. Balance updates after admin approval."
         ),
         "topup_wait_receipt": "📸 Send a photo of your payment receipt.",
         "topup_sent": "✅ Receipt sent to {admin}. Balance updates after approval.",
-        "topup_approved": "✅ Your balance has been topped up by <b>{amt:,.0f} UZS</b>!",
+        "topup_approved": "✅ Your balance has been topped up by <b>{amt_display}</b>!",
         "topup_rejected": "❌ Receipt rejected.",
         "ask_gram_buy": (
             "🟢 <b>Buy Gram</b>\n"
@@ -776,6 +787,19 @@ def sub_kb(lang: str) -> InlineKeyboardMarkup:
         inline_keyboard=[
             [InlineKeyboardButton(text=t["btn_sub_channel"], url=f"https://t.me/{clean_ch}")],
             [InlineKeyboardButton(text=t["btn_check_sub"], callback_data="check_sub")],
+        ]
+    )
+
+
+def topup_curr_kb(lang: str) -> InlineKeyboardMarkup:
+    t = TEXTS[lang]
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text=t["btn_curr_uzs"], callback_data="topup_curr_uzs"),
+                InlineKeyboardButton(text=t["btn_curr_usd"], callback_data="topup_curr_usd"),
+            ],
+            [InlineKeyboardButton(text=t["btn_back"], callback_data="back_main")],
         ]
     )
 
@@ -1200,9 +1224,27 @@ async def on_topup_start(callback: CallbackQuery, bot: Bot) -> None:
         await callback.answer(TEXTS[get_lang(uid)]["not_sub_yet"].format(ch=CHANNEL_USERNAME), show_alert=True)
         return
     lang = get_lang(uid)
-    user_state[uid] = {"step": "topup_amount"}
     await callback.answer()
-    await callback.message.answer(TEXTS[lang]["ask_topup"], parse_mode="HTML")
+    await callback.message.answer(
+        TEXTS[lang]["choose_topup_curr"],
+        parse_mode="HTML",
+        reply_markup=topup_curr_kb(lang),
+    )
+
+
+@dp.callback_query(F.data.in_({"topup_curr_uzs", "topup_curr_usd"}))
+async def on_topup_currency(callback: CallbackQuery, bot: Bot) -> None:
+    uid = callback.from_user.id
+    if not await is_subscribed(bot, uid):
+        await callback.answer(TEXTS[get_lang(uid)]["not_sub_yet"].format(ch=CHANNEL_USERNAME), show_alert=True)
+        return
+    lang = get_lang(uid)
+    t = TEXTS[lang]
+    curr = "uzs" if callback.data == "topup_curr_uzs" else "usd"
+    user_state[uid] = {"step": "topup_amount", "currency": curr}
+    await callback.answer()
+    prompt = t["ask_topup_uzs"] if curr == "uzs" else t["ask_topup_usd"]
+    await callback.message.answer(prompt, parse_mode="HTML")
 
 
 @dp.callback_query(F.data.in_({"gram_buy", "gram_sell"}))
@@ -1314,17 +1356,18 @@ async def on_topup_ok(callback: CallbackQuery, bot: Bot) -> None:
         return
 
     target_uid = req["uid"]
-    amt = req["amount"]
-    user_balance_uzs[target_uid] = get_bal(target_uid) + amt
+    amt_uzs = req["amount_uzs"]
+    amt_display = req["amt_display"]
+    user_balance_uzs[target_uid] = get_bal(target_uid) + amt_uzs
 
     await callback.message.answer(
-        f"✅ Tasdiqlandi: ID <code>{target_uid}</code> ga <b>{amt:,.0f} so‘m</b> qo‘shildi.",
+        f"✅ Tasdiqlandi: ID <code>{target_uid}</code> ga <b>{amt_display}</b> qo‘shildi.",
         parse_mode="HTML",
     )
     try:
         await bot.send_message(
             target_uid,
-            TEXTS[get_lang(target_uid)]["topup_approved"].format(amt=amt),
+            TEXTS[get_lang(target_uid)]["topup_approved"].format(amt_display=amt_display),
             parse_mode="HTML",
         )
     except Exception:
@@ -1332,7 +1375,7 @@ async def on_topup_ok(callback: CallbackQuery, bot: Bot) -> None:
 
     await post_to_channel(
         bot,
-        f"💳 <b>Hisob to‘ldirildi</b>\n👤 Mijoz ID: <code>{target_uid}</code>\n💵 Summa: <b>{amt:,.0f} so‘m</b>",
+        f"💳 <b>Hisob to‘ldirildi</b>\n👤 Mijoz ID: <code>{target_uid}</code>\n💵 Summa: <b>{amt_display}</b>",
     )
 
 
@@ -1363,11 +1406,16 @@ async def on_photo(message: Message, bot: Bot) -> None:
 
     lang = get_lang(uid)
     t = TEXTS[lang]
-    amt = st["amount"]
+    amt_uzs = st["amount_uzs"]
+    amt_display = st["amt_display"]
     user_state.pop(uid, None)
 
     req_id = message.message_id
-    pending_topups[req_id] = {"uid": uid, "amount": amt}
+    pending_topups[req_id] = {
+        "uid": uid,
+        "amount_uzs": amt_uzs,
+        "amt_display": amt_display,
+    }
 
     uname = f"@{message.from_user.username}" if message.from_user.username else "yo'q"
     admin_kb = InlineKeyboardMarkup(
@@ -1385,7 +1433,7 @@ async def on_photo(message: Message, bot: Bot) -> None:
             caption=(
                 f"💳 <b>Hisob to‘ldirish cheki</b>\n"
                 f"👤 Foydalanuvchi ID: <code>{uid}</code> ({uname})\n"
-                f"💵 Summa: <b>{amt:,.0f} so‘m</b>\n"
+                f"💵 Summa: <b>{amt_display}</b>\n"
                 f"{build_cards_block()}"
             ),
             parse_mode="HTML",
@@ -1542,15 +1590,30 @@ async def on_text(message: Message, bot: Bot) -> None:
         await message.answer(t["invalid_num"], parse_mode="HTML")
         return
 
+    gram_uzs, _, usd_uzs = await fetch_live_gram_rates()
+
     if step == "topup_amount":
-        user_state[uid] = {"step": "topup_receipt", "amount": val}
+        curr = st.get("currency", "uzs")
+        if curr == "usd":
+            amt_uzs = val * usd_uzs
+            amt_display = f"${val:,.2f} ({amt_uzs:,.0f} so'm)"
+        else:
+            amt_uzs = val
+            amt_display = fmt_money(val, usd_uzs)
+
+        user_state[uid] = {
+            "step": "topup_receipt",
+            "amount_uzs": amt_uzs,
+            "amt_display": amt_display,
+        }
         await message.answer(
-            t["topup_card_info"].format(amt=val, cards_block=build_cards_block()),
+            t["topup_card_info"].format(
+                amt_display=amt_display,
+                cards_block=build_cards_block(),
+            ),
             parse_mode="HTML",
         )
         return
-
-    gram_uzs, _, usd_uzs = await fetch_live_gram_rates()
 
     if step == "gram_buy":
         total_uzs = calc_buy_uzs(val, gram_uzs, usd_uzs)
