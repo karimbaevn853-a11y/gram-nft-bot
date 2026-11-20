@@ -1702,3 +1702,348 @@ async def main() -> None:
 
 if __name__ == "__main__":
     asyncio.run(main())
+from aiogram import Router, F
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import StatesGroup, State
+
+router = Router()
+
+MIN_STARS = 50
+MAX_STARS = 10000
+USD_RATE = 12800
+ADMIN_ID = 123456789  # <-- O'zingizning Telegram ID raqamingizni yozing
+
+STARS_PACKAGES = [
+    (50, 9800),
+    (75, 14750),
+    (100, 19700),
+    (150, 29600),
+    (250, 49400),
+    (350, 69200),
+    (500, 98900),
+    (750, 148400),
+    (1000, 197900),
+    (1500, 296900),
+    (2500, 494900),
+    (5000, 989900),
+    (10000, 1979900),
+]
+
+
+class StarsOrderState(StatesGroup):
+    waiting_username = State()
+    waiting_custom_amount = State()
+
+
+TEXTS = {
+    "uz": {
+        "title": (
+            "⭐ <b>Telegram Stars buyurtma</b>\n\n"
+            f"Minimal: <b>{MIN_STARS}</b>\n"
+            f"Maksimal: <b>{MAX_STARS}</b>\n"
+            f"Kurs: <b>1$ = {USD_RATE:,} so'm</b>\n\n"
+            "Kerakli miqdorni tanlang yoki raqam bilan yuboring:"
+        ),
+        "uzs": "so'm",
+        "custom": "✏️ Boshqa miqdor kiritish",
+        "back": "🔙 Orqaga",
+        "selected": (
+            "✅ Tanlandi: <b>{stars} Stars</b>\n"
+            "💵 Narxi: <b>{uzs} so'm</b> (<b>${usd}</b>)\n\n"
+            "Stars yuboriladigan <b>@username</b> ni kiriting:"
+        ),
+        "enter_custom": f"Raqam kiriting ({MIN_STARS} dan {MAX_STARS} gacha):",
+        "invalid_amount": f"❌ Miqdor {MIN_STARS} dan {MAX_STARS} gacha bo'lishi kerak. Qayta kiriting:",
+        "invalid_username": "❌ Username <code>@</code> bilan boshlanishi kerak (masalan, <code>@username</code>). Qayta kiriting:",
+        "sent_to_user": (
+            "🎉 <b>Buyurtmangiz qabul qilindi!</b>\n\n"
+            "⭐ Miqdor: <b>{stars} Stars</b>\n"
+            "👤 Qabul qiluvchi: <b>{target}</b>\n"
+            "💵 Summa: <b>{uzs} so'm</b> (<b>${usd}</b>)\n\n"
+            "Admin tez orada tekshirib, yuboradi."
+        ),
+        "order_done": "✅ <b>{stars} Stars</b> ({target}) muvaffaqiyatli yuborildi!",
+        "order_cancelled": "❌ <b>{stars} Stars</b> ({target}) bo'yicha buyurtmangiz bekor qilindi.",
+    },
+    "ru": {
+        "title": (
+            "⭐ <b>Заказ Telegram Stars</b>\n\n"
+            f"Минимум: <b>{MIN_STARS}</b>\n"
+            f"Максимум: <b>{MAX_STARS}</b>\n"
+            f"Курс: <b>1$ = {USD_RATE:,} сум</b>\n\n"
+            "Выберите нужное количество или отправьте число:"
+        ),
+        "uzs": "сум",
+        "custom": "✏️ Ввести другое количество",
+        "back": "🔙 Назад",
+        "selected": (
+            "✅ Выбрано: <b>{stars} Stars</b>\n"
+            "💵 Цена: <b>{uzs} сум</b> (<b>${usd}</b>)\n\n"
+            "Введите <b>@username</b> получателя:"
+        ),
+        "enter_custom": f"Введите число от {MIN_STARS} до {MAX_STARS}:",
+        "invalid_amount": f"❌ Количество должно быть от {MIN_STARS} до {MAX_STARS}. Повторите ввод:",
+        "invalid_username": "❌ Username должен начинаться с <code>@</code> (например, <code>@username</code>). Повторите:",
+        "sent_to_user": (
+            "🎉 <b>Ваш заказ принят!</b>\n\n"
+            "⭐ Количество: <b>{stars} Stars</b>\n"
+            "👤 Получатель: <b>{target}</b>\n"
+            "💵 Сумма: <b>{uzs} сум</b> (<b>${usd}</b>)\n\n"
+            "Администратор проверит и отправит в ближайшее время."
+        ),
+        "order_done": "✅ <b>{stars} Stars</b> ({target}) успешно отправлены!",
+        "order_cancelled": "❌ Ваш заказ на <b>{stars} Stars</b> ({target}) был отменён.",
+    },
+    "en": {
+        "title": (
+            "⭐ <b>Telegram Stars Order</b>\n\n"
+            f"Minimum: <b>{MIN_STARS}</b>\n"
+            f"Maximum: <b>{MAX_STARS}</b>\n"
+            f"Rate: <b>1$ = {USD_RATE:,} UZS</b>\n\n"
+            "Select the desired amount or send a number:"
+        ),
+        "uzs": "UZS",
+        "custom": "✏️ Enter custom amount",
+        "back": "🔙 Back",
+        "selected": (
+            "✅ Selected: <b>{stars} Stars</b>\n"
+            "💵 Price: <b>{uzs} UZS</b> (<b>${usd}</b>)\n\n"
+            "Enter recipient <b>@username</b>:"
+        ),
+        "enter_custom": f"Enter a number from {MIN_STARS} to {MAX_STARS}:",
+        "invalid_amount": f"❌ Amount must be between {MIN_STARS} and {MAX_STARS}. Try again:",
+        "invalid_username": "❌ Username must start with <code>@</code> (e.g., <code>@username</code>). Try again:",
+        "sent_to_user": (
+            "🎉 <b>Your order has been received!</b>\n\n"
+            "⭐ Amount: <b>{stars} Stars</b>\n"
+            "👤 Recipient: <b>{target}</b>\n"
+            "💵 Price: <b>{uzs} UZS</b> (<b>${usd}</b>)\n\n"
+            "Admin will review and send it shortly."
+        ),
+        "order_done": "✅ <b>{stars} Stars</b> ({target}) have been sent!",
+        "order_cancelled": "❌ Your order for <b>{stars} Stars</b> ({target}) was cancelled.",
+    },
+}
+
+
+def get_lang(message_or_cb, user_lang: str | None = None) -> str:
+    if user_lang in TEXTS:
+        return user_lang
+    code = (message_or_cb.from_user.language_code or "uz").lower()
+    if code.startswith("ru"):
+        return "ru"
+    if code.startswith("en"):
+        return "en"
+    return "uz"
+
+
+def to_usd(uzs_amount: int, rate: float = USD_RATE) -> str:
+    return f"{uzs_amount / rate:.2f}"
+
+
+def format_uzs(amount: int) -> str:
+    return f"{amount:,}"
+
+
+def calc_custom_uzs(stars: int) -> int:
+    for s, p in STARS_PACKAGES:
+        if s == stars:
+            return p
+    unit = 196 if stars < 100 else 198
+    return max(9800, stars * unit - 100)
+
+
+def stars_menu_keyboard(lang: str = "uz") -> InlineKeyboardMarkup:
+    t = TEXTS.get(lang, TEXTS["uz"])
+    rows = []
+
+    for i in range(0, len(STARS_PACKAGES) - 1, 2):
+        s1, p1 = STARS_PACKAGES[i]
+        s2, p2 = STARS_PACKAGES[i + 1]
+        u1, u2 = to_usd(p1), to_usd(p2)
+
+        rows.append([
+            InlineKeyboardButton(
+                text=f"⭐ {s1} — {format_uzs(p1)} {t['uzs']} (${u1})",
+                callback_data=f"stars_buy:{s1}:{p1}",
+            ),
+            InlineKeyboardButton(
+                text=f"⭐ {s2} — {format_uzs(p2)} {t['uzs']} (${u2})",
+                callback_data=f"stars_buy:{s2}:{p2}",
+            ),
+        ])
+
+    if len(STARS_PACKAGES) % 2 == 1:
+        last_s, last_p = STARS_PACKAGES[-1]
+        last_u = to_usd(last_p)
+        rows.append([
+            InlineKeyboardButton(
+                text=f"⭐ {last_s} — {format_uzs(last_p)} {t['uzs']} (${last_u})",
+                callback_data=f"stars_buy:{last_s}:{last_p}",
+            )
+        ])
+
+    rows.append([InlineKeyboardButton(text=t["custom"], callback_data="stars_custom")])
+    rows.append([InlineKeyboardButton(text=t["back"], callback_data="main_menu")])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def admin_order_keyboard(buyer_id: int, stars: int, lang: str) -> InlineKeyboardMarkup:
+    # callback_data 64 baytdan oshmasligi uchun qisqa format
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text="✅ Yuborildi",
+                callback_data=f"st_act:done:{buyer_id}:{stars}:{lang}",
+            ),
+            InlineKeyboardButton(
+                text="❌ Bekor qilish",
+                callback_data=f"st_act:cancel:{buyer_id}:{stars}:{lang}",
+            ),
+        ]
+    ])
+
+
+@router.message(F.text.in_(["Telegram Stars", "⭐ Telegram Stars", "Заказ Telegram Stars", "Telegram Stars Order"]))
+async def open_stars_menu(message: Message, state: FSMContext, user_lang: str | None = None):
+    await state.clear()
+    lang = get_lang(message, user_lang)
+    t = TEXTS[lang]
+    await message.answer(
+        t["title"],
+        reply_markup=stars_menu_keyboard(lang),
+        parse_mode="HTML",
+    )
+
+
+@router.callback_query(F.data.startswith("stars_buy:"))
+async def handle_stars_package(callback: CallbackQuery, state: FSMContext, user_lang: str | None = None):
+    _, stars_str, uzs_str = callback.data.split(":")
+    stars = int(stars_str)
+    uzs = int(uzs_str)
+    usd = to_usd(uzs)
+
+    lang = get_lang(callback, user_lang)
+    await state.update_data(stars=stars, uzs=uzs, usd=usd, lang=lang)
+    await state.set_state(StarsOrderState.waiting_username)
+
+    t = TEXTS[lang]
+    await callback.answer()
+    await callback.message.answer(
+        t["selected"].format(stars=stars, uzs=format_uzs(uzs), usd=usd),
+        parse_mode="HTML",
+    )
+
+
+@router.callback_query(F.data == "stars_custom")
+async def handle_custom_amount_btn(callback: CallbackQuery, state: FSMContext, user_lang: str | None = None):
+    lang = get_lang(callback, user_lang)
+    await state.update_data(lang=lang)
+    await state.set_state(StarsOrderState.waiting_custom_amount)
+    t = TEXTS[lang]
+    await callback.answer()
+    await callback.message.answer(t["enter_custom"])
+
+
+@router.message(StarsOrderState.waiting_custom_amount)
+async def process_custom_amount(message: Message, state: FSMContext, user_lang: str | None = None):
+    lang = get_lang(message, user_lang)
+    t = TEXTS[lang]
+
+    if not message.text or not message.text.strip().isdigit():
+        await message.answer(t["invalid_amount"])
+        return
+
+    stars = int(message.text.strip())
+    if not (MIN_STARS <= stars <= MAX_STARS):
+        await message.answer(t["invalid_amount"])
+        return
+
+    uzs = calc_custom_uzs(stars)
+    usd = to_usd(uzs)
+    await state.update_data(stars=stars, uzs=uzs, usd=usd, lang=lang)
+    await state.set_state(StarsOrderState.waiting_username)
+    await message.answer(
+        t["selected"].format(stars=stars, uzs=format_uzs(uzs), usd=usd),
+        parse_mode="HTML",
+    )
+
+
+@router.message(StarsOrderState.waiting_username)
+async def process_recipient_username(message: Message, state: FSMContext, user_lang: str | None = None):
+    lang = get_lang(message, user_lang)
+    t = TEXTS[lang]
+    target_username = (message.text or "").strip()
+
+    if not target_username.startswith("@") or len(target_username) < 2:
+        await message.answer(t["invalid_username"], parse_mode="HTML")
+        return
+
+    data = await state.get_data()
+    stars = data.get("stars")
+    uzs = data.get("uzs")
+    usd = data.get("usd")
+
+    buyer_user = f"@{message.from_user.username}" if message.from_user.username else "yo‘q"
+
+    admin_text = (
+        "🆕 <b>Yangi Telegram Stars buyurtma!</b>\n\n"
+        f"👤 Buyurtmachi: {message.from_user.full_name} ({buyer_user})\n"
+        f"🆔 User ID: <code>{message.from_user.id}</code>\n"
+        f"🎁 Qabul qiluvchi: <b>{target_username}</b>\n"
+        f"⭐ Miqdor: <b>{stars} Stars</b>\n"
+        f"💵 Summa: <b>{format_uzs(uzs)} so'm</b> (<b>${usd}</b>)"
+    )
+
+    await message.bot.send_message(
+        chat_id=ADMIN_ID,
+        text=admin_text,
+        reply_markup=admin_order_keyboard(message.from_user.id, stars, lang),
+        parse_mode="HTML",
+    )
+
+    await message.answer(
+        t["sent_to_user"].format(
+            stars=stars,
+            target=target_username,
+            uzs=format_uzs(uzs),
+            usd=usd,
+        ),
+        parse_mode="HTML",
+    )
+    await state.clear()
+
+
+@router.callback_query(F.data.startswith("st_act:"))
+async def handle_admin_action(callback: CallbackQuery):
+    _, action, buyer_id_str, stars_str, lang = callback.data.split(":")
+    buyer_id = int(buyer_id_str)
+    stars = int(stars_str)
+    t = TEXTS.get(lang, TEXTS["uz"])
+
+    # Xabardagi qabul qiluvchi username'ni ajratib olish
+    old_text = callback.message.html_text or ""
+    target = "@username"
+    for line in old_text.splitlines():
+        if "@" in line:
+            part = line.split("@", 1)[1].split("<")[0].strip()
+            if part:
+                target = "@" + part
+                break
+
+    if action == "done":
+        status_line = "\n\n✅ <b>HOLAT: YUBORILDI</b>"
+        user_msg = t["order_done"].format(stars=stars, target=target)
+        toast = "Tasdiqlandi!"
+    else:
+        status_line = "\n\n❌ <b>HOLAT: BEKOR QILINDI</b>"
+        user_msg = t["order_cancelled"].format(stars=stars, target=target)
+        toast = "Bekor qilindi!"
+
+    await callback.message.edit_text(old_text + status_line, parse_mode="HTML")
+    try:
+        await callback.bot.send_message(chat_id=buyer_id, text=user_msg, parse_mode="HTML")
+    except Exception:
+        pass
+    await callback.answer(toast)
